@@ -175,6 +175,29 @@ describe('security persistence', () => {
     expect(await staff.getCurrentProfileVersion('200', created.profile.id)).toBeNull();
   });
 
+  it('lists active members for only the requested guild Staff Profile', async () => {
+    const created = await staff.createProfileWithInitialVersion({
+      guildId: '100',
+      name: 'Dashboard Moderator',
+      discordRoleId: 'role-dashboard-mod',
+      rank: 18,
+      permissions: ['member.ban'],
+      actionPolicies: {},
+      createdBy: '1',
+    });
+    await staff.assign({
+      guildId: '100',
+      userId: 'dashboard-user',
+      profileId: created.profile.id,
+      actorUserId: '1',
+    });
+
+    expect(await staff.listActiveAssignmentsForProfile('100', created.profile.id)).toEqual([
+      expect.objectContaining({ userId: 'dashboard-user', profileId: created.profile.id }),
+    ]);
+    expect(await staff.listActiveAssignmentsForProfile('200', created.profile.id)).toEqual([]);
+  });
+
   it('tracks active assignment sync status and deactivation by assignment id', async () => {
     const created = await staff.createProfileWithInitialVersion({
       guildId: '100',

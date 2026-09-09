@@ -1,4 +1,9 @@
-import { GuildRepository, SecurityManagerRepository, type Database } from '@knight/database';
+import {
+  GuildRepository,
+  SecurityManagerRepository,
+  StaffRepository,
+  type Database,
+} from '@knight/database';
 import { describe, expect, it } from 'vitest';
 import { createWebRepositories } from './server-dependencies';
 
@@ -8,5 +13,6 @@ describe('createWebRepositories', () => {
 
     expect(repositories.guilds).toBeInstanceOf(GuildRepository);
     expect(repositories.managers).toBeInstanceOf(SecurityManagerRepository);
+    expect(repositories.staff).toBeInstanceOf(StaffRepository);
   });
 });

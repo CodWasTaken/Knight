@@ -180,3 +180,80 @@ dd {
     padding: 1.5rem;
   }
 }
+
+.inlineAction {
+  display: inline-block;
+  margin-top: 0.5rem;
+  color: #c7d3ff;
+  font-weight: 700;
+}
+.detailGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 1rem;
+  align-items: start;
+}
+.memberList {
+  list-style: none;
+  padding: 0;
+  margin: 1.25rem 0 0;
+  display: grid;
+  gap: 0.55rem;
+}
+.memberList li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  border-top: 1px solid #273044;
+  padding-top: 0.65rem;
+}
+.policyForm {
+  display: grid;
+  gap: 1.5rem;
+}
+.toggleRow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  color: #dce3f2;
+}
+.toggleRow input {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+.windowList {
+  display: grid;
+  gap: 0.8rem;
+}
+.windowRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.8rem;
+}
+.windowRow label {
+  display: grid;
+  gap: 0.35rem;
+  color: #aeb8ca;
+  font-size: 0.85rem;
+}
+.windowRow input {
+  width: 100%;
+  border: 1px solid #343e53;
+  border-radius: 9px;
+  background: #111722;
+  color: #f4f6fb;
+  padding: 0.7rem 0.75rem;
+  font: inherit;
+}
+.policyForm button {
+  justify-self: start;
+}
+@media (max-width: 760px) {
+  .detailGrid {
+    grid-template-columns: 1fr;
+  }
+  .windowRow {
+    grid-template-columns: 1fr;
+  }
+}

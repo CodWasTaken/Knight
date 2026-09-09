@@ -1,5 +1,5 @@
 import type { ActionId, ActionPolicies } from '@knight/contracts';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq } from 'drizzle-orm';
 import type { Database } from '../client.js';
 import { staffAssignments, staffProfiles, staffProfileVersions } from '../schema/index.js';
 
@@ -283,6 +283,39 @@ export class StaffRepository {
       )
       .limit(1);
     return assignment ?? null;
+  }
+
+  public async listActiveAssignmentsForProfile(
+    guildId: string,
+    profileId: string,
+  ): Promise<ActiveStaffAssignmentRecord[]> {
+    return this.database.db
+      .select({
+        id: staffAssignments.id,
+        guildId: staffAssignments.guildId,
+        userId: staffAssignments.userId,
+        profileId: staffAssignments.profileId,
+        profileName: staffProfiles.name,
+        discordRoleId: staffProfiles.discordRoleId,
+        profileRank: staffProfiles.rank,
+        syncStatus: staffAssignments.syncStatus,
+      })
+      .from(staffAssignments)
+      .innerJoin(
+        staffProfiles,
+        and(
+          eq(staffAssignments.profileId, staffProfiles.id),
+          eq(staffAssignments.guildId, staffProfiles.guildId),
+        ),
+      )
+      .where(
+        and(
+          eq(staffAssignments.guildId, guildId),
+          eq(staffAssignments.profileId, profileId),
+          eq(staffAssignments.active, true),
+        ),
+      )
+      .orderBy(asc(staffAssignments.userId));
   }
 
   public async setAssignmentSyncStatus(

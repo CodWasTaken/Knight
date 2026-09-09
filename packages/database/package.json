@@ -7,7 +7,8 @@
     "./client": "./src/client.ts",
     "./schema/auth": "./src/schema/auth.ts",
     "./repositories/guild-repository": "./src/repositories/guild-repository.ts",
-    "./repositories/security-manager-repository": "./src/repositories/security-manager-repository.ts"
+    "./repositories/security-manager-repository": "./src/repositories/security-manager-repository.ts",
+    "./repositories/staff-repository": "./src/repositories/staff-repository.ts"
   },
   "scripts": {
     "lint": "eslint src",
