@@ -1,9 +1,24 @@
-export type Database = Readonly<{ state: 'NOT_IMPLEMENTED' }>;
+import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
+import { Pool } from 'pg';
+import * as schema from './schema/index.js';
 
-export function createDatabase(_databaseUrl: string): Database {
-  return { state: 'NOT_IMPLEMENTED' };
+export type Database = Readonly<{
+  pool: Pool;
+  db: NodePgDatabase<typeof schema>;
+}>;
+
+export function createDatabase(databaseUrl: string): Database {
+  const pool = new Pool({
+    connectionString: databaseUrl,
+    max: 10,
+  });
+
+  return {
+    pool,
+    db: drizzle(pool, { schema }),
+  };
 }
 
-export async function closeDatabase(_database: Database): Promise<void> {
-  return Promise.resolve();
+export async function closeDatabase(database: Database): Promise<void> {
+  await database.pool.end();
 }

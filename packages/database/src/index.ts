@@ -1,3 +1,7 @@
 export * from './client.js';
+export * from './migrations.js';
+export * from './schema/index.js';
 export * from './repositories/guild-repository.js';
 export * from './repositories/staff-repository.js';
+export * from './repositories/security-manager-repository.js';
+export * from './repositories/policy-decision-repository.js';

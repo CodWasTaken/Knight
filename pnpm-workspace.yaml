@@ -1,4 +1,6 @@
 packages:
-  - "apps/*"
-  - "packages/*"
+  - 'apps/*'
+  - 'packages/*'
+allowBuilds:
+  esbuild: false
 minimumReleaseAge: 1440
