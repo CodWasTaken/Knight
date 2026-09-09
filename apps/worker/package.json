@@ -1,0 +1,13 @@
+{
+  "name": "@knight/worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.json",
+    "dev": "node --enable-source-maps dist/index.js",
+    "start": "node dist/index.js"
+  }
+}
