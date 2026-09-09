@@ -1,4 +1,4 @@
-import { GuildMode, PolicyDecision } from '@knight/contracts';
+import { GuildMode, PolicyDecision, type SecurityDecision } from '@knight/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { closeDatabase, createDatabase } from '../client.js';
 import { applyMigrations } from '../migrations.js';
@@ -100,6 +100,30 @@ describe('security persistence', () => {
     expect(await managers.isSecurityManager('200', '77')).toBe(false);
     await managers.revoke('100', '77');
     expect(await managers.isSecurityManager('100', '77')).toBe(false);
+  });
+
+  it('records guarded decisions from the shared request and decision shape', async () => {
+    const request = {
+      guildId: '100',
+      actorUserId: '42',
+      action: 'member.ban' as const,
+      targetId: '77',
+      nowMs: 1_000,
+    };
+    const decision: SecurityDecision = {
+      decision: PolicyDecision.Deny,
+      code: 'RATE_LIMIT_EXCEEDED',
+      reason: 'test',
+      policyVersionId: null,
+      metadata: { rate: { allowed: false } },
+    };
+
+    const id = await decisions.record(request, decision);
+    const result = await database.pool.query<{ code: string; target_id: string }>(
+      'SELECT code, target_id FROM policy_decisions WHERE id = $1',
+      [id],
+    );
+    expect(result.rows[0]).toEqual({ code: 'RATE_LIMIT_EXCEEDED', target_id: '77' });
   });
 
   it('records policy decisions with guild attribution', async () => {

@@ -1,4 +1,4 @@
-import type { ActionId, PolicyDecision } from '@knight/contracts';
+import type { ActionId, PolicyDecision, SecurityDecision } from '@knight/contracts';
 import type { Database } from '../client.js';
 import { policyDecisions } from '../schema/index.js';
 
@@ -10,28 +10,58 @@ export type PolicyDecisionRecordInput = Readonly<{
   decision: PolicyDecision;
   code: string;
   profileVersionId?: string | null;
-  metadata?: Record<string, unknown>;
+  metadata?: Readonly<Record<string, unknown>>;
 }>;
+
+export type PolicyDecisionRequest = Readonly<{
+  guildId: string;
+  actorUserId: string;
+  action: ActionId;
+  targetId?: string | null;
+}>;
+function normalizeDecision(
+  input: PolicyDecisionRecordInput | PolicyDecisionRequest,
+  decision?: SecurityDecision,
+): PolicyDecisionRecordInput {
+  if (!decision) return input as PolicyDecisionRecordInput;
+
+  return {
+    guildId: input.guildId,
+    actorUserId: input.actorUserId,
+    action: input.action,
+    targetId: input.targetId ?? null,
+    decision: decision.decision,
+    code: decision.code,
+    profileVersionId: decision.policyVersionId,
+    metadata: decision.metadata,
+  };
+}
 
 export class PolicyDecisionRepository {
   public constructor(private readonly database: Database) {}
 
-  public async record(input: PolicyDecisionRecordInput): Promise<string> {
-    const [decision] = await this.database.db
+  public async record(input: PolicyDecisionRecordInput): Promise<string>;
+  public async record(request: PolicyDecisionRequest, decision: SecurityDecision): Promise<string>;
+  public async record(
+    input: PolicyDecisionRecordInput | PolicyDecisionRequest,
+    decision?: SecurityDecision,
+  ): Promise<string> {
+    const normalized = normalizeDecision(input, decision);
+    const [stored] = await this.database.db
       .insert(policyDecisions)
       .values({
-        guildId: input.guildId,
-        actorUserId: input.actorUserId,
-        action: input.action,
-        targetId: input.targetId ?? null,
-        decision: input.decision,
-        code: input.code,
-        profileVersionId: input.profileVersionId ?? null,
-        metadata: input.metadata ?? {},
+        guildId: normalized.guildId,
+        actorUserId: normalized.actorUserId,
+        action: normalized.action,
+        targetId: normalized.targetId ?? null,
+        decision: normalized.decision,
+        code: normalized.code,
+        profileVersionId: normalized.profileVersionId ?? null,
+        metadata: normalized.metadata ?? {},
       })
       .returning({ id: policyDecisions.id });
 
-    if (!decision) throw new Error('Failed to record policy decision');
-    return decision.id;
+    if (!stored) throw new Error('Failed to record policy decision');
+    return stored.id;
   }
 }
