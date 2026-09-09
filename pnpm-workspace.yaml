@@ -2,5 +2,3 @@ packages:
   - "apps/*"
   - "packages/*"
 minimumReleaseAge: 1440
-onlyBuiltDependencies:
-  - esbuild
