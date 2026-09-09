@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseEnv } from './env.js';
+import { parseEnv, parseWebEnv } from './env.js';
 
 describe('parseEnv', () => {
   it('rejects missing security-critical variables', () => {
@@ -17,6 +17,19 @@ describe('parseEnv', () => {
       DATABASE_URL: 'postgres://knight:knight@localhost:5432/knight',
       REDIS_URL: 'redis://localhost:6379',
     });
+    expect(env.NODE_ENV).toBe('test');
+  });
+
+  it('accepts a web configuration without bot-only credentials', () => {
+    const env = parseWebEnv({
+      NODE_ENV: 'test',
+      DISCORD_CLIENT_ID: '123',
+      DISCORD_CLIENT_SECRET: 'secret',
+      AUTH_SECRET: 'x'.repeat(32),
+      APP_URL: 'http://localhost:3000',
+      DATABASE_URL: 'postgres://knight:knight@localhost:5432/knight',
+    });
+
     expect(env.NODE_ENV).toBe('test');
   });
 });

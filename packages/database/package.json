@@ -2,7 +2,13 @@
   "name": "@knight/database",
   "private": true,
   "type": "module",
-  "exports": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client.ts",
+    "./schema/auth": "./src/schema/auth.ts",
+    "./repositories/guild-repository": "./src/repositories/guild-repository.ts",
+    "./repositories/security-manager-repository": "./src/repositories/security-manager-repository.ts"
+  },
   "scripts": {
     "lint": "eslint src",
     "typecheck": "tsc --noEmit -p tsconfig.json",

@@ -11,8 +11,22 @@ const EnvSchema = z.object({
   REDIS_URL: z.string().url(),
 });
 
+const WebEnvSchema = EnvSchema.pick({
+  NODE_ENV: true,
+  DISCORD_CLIENT_ID: true,
+  DISCORD_CLIENT_SECRET: true,
+  AUTH_SECRET: true,
+  APP_URL: true,
+  DATABASE_URL: true,
+});
+
 export type KnightEnv = z.infer<typeof EnvSchema>;
+export type WebEnv = z.infer<typeof WebEnvSchema>;
 
 export function parseEnv(input: Record<string, string | undefined>): KnightEnv {
   return EnvSchema.parse(input);
+}
+
+export function parseWebEnv(input: Record<string, string | undefined>): WebEnv {
+  return WebEnvSchema.parse(input);
 }

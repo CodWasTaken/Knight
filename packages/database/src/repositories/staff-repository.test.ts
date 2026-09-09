@@ -102,6 +102,21 @@ describe('security persistence', () => {
     expect(await managers.isSecurityManager('100', '77')).toBe(false);
   });
 
+  it('lists only guilds where the user has explicit Knight dashboard authority', async () => {
+    await guilds.setMode('100', GuildMode.Test);
+    await managers.grant({ guildId: '200', userId: '77', grantedBy: '2' });
+
+    expect(await guilds.listAccessibleToUser('1')).toEqual([
+      expect.objectContaining({ id: '100', mode: GuildMode.Test, setupStep: 'WELCOME' }),
+    ]);
+    expect(await guilds.listAccessibleToUser('77')).toEqual([
+      expect.objectContaining({ id: '200', mode: GuildMode.Observe, setupStep: 'WELCOME' }),
+    ]);
+    expect(await guilds.listAccessibleToUser('999')).toEqual([]);
+
+    await managers.revoke('200', '77');
+  });
+
   it('records guarded decisions from the shared request and decision shape', async () => {
     const request = {
       guildId: '100',
