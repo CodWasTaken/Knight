@@ -45,6 +45,18 @@ export async function authorizeGuardedAction(
     await ports.decisions.record(request, base);
     return base;
   }
+
+  if (!context.actionPolicy.enabled) {
+    const denied: SecurityDecision = {
+      ...base,
+      decision: PolicyDecision.Deny,
+      code: 'ACTION_DISABLED',
+      reason: 'This action is disabled by the effective Staff Profile policy.',
+    };
+    await ports.decisions.record(request, denied);
+    return denied;
+  }
+
   let rate: RateLimitResult;
   try {
     const windows = context.actionPolicy.unlimited ? [] : context.actionPolicy.rateWindows;

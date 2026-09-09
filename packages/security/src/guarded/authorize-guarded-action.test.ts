@@ -130,4 +130,16 @@ describe('authorizeGuardedAction', () => {
     expect(ports.decisions.record).toHaveBeenCalledTimes(1);
     expect(ports.decisions.record).toHaveBeenCalledWith(request, result);
   });
+  it('fails closed when the action policy is disabled', async () => {
+    const ports = makePorts({
+      ...baseContext,
+      actionPolicy: { enabled: false, unlimited: false, rateWindows: [] },
+    });
+
+    const result = await authorizeGuardedAction(request, ports);
+
+    expect(result).toMatchObject({ decision: PolicyDecision.Deny, code: 'ACTION_DISABLED' });
+    expect(ports.rateLimits.consume).not.toHaveBeenCalled();
+    expect(ports.decisions.record).toHaveBeenCalledWith(request, result);
+  });
 });
