@@ -4,16 +4,20 @@ import { parseEnv } from '@knight/config';
 import {
   closeDatabase,
   createDatabase,
+  GuildRepository,
   PolicyDecisionRepository,
+  SecurityManagerRepository,
   StaffRepository,
 } from '@knight/database';
-import { DiscordJsAdapter } from '@knight/discord';
+import { DiscordJsAdapter, type DiscordActionPort } from '@knight/discord';
 import { closeRedis, createRedis, ExecutionCorrelationStore, RateLimitStore } from '@knight/redis';
 import { authorizeGuardedAction } from '@knight/security';
 import { Events, MessageFlags, type Client, type Interaction } from 'discord.js';
 import { routeInteraction, type CommandRouterDependencies } from './commands/router.js';
 import { createDiscordClient } from './discord-client.js';
 import { registerCommands } from './register-commands.js';
+import { SecurityManagerService } from './security/security-manager-service.js';
+import { RoleSyncService } from './staff/role-sync-service.js';
 async function replyWithSafeCommandError(interaction: Interaction): Promise<void> {
   if (!interaction.isRepliable()) return;
   const payload = {
@@ -40,6 +44,38 @@ function installCommandRouter(client: Client, dependencies: CommandRouterDepende
     });
   });
 }
+
+export function createCommandRouterDependencies(input: {
+  database: ReturnType<typeof createDatabase>;
+  redis: ReturnType<typeof createRedis>;
+  discord: DiscordActionPort;
+  createCorrelationId: () => string;
+}): CommandRouterDependencies {
+  const guilds = new GuildRepository(input.database);
+  const staffProfiles = new StaffRepository(input.database);
+  const managers = new SecurityManagerRepository(input.database);
+
+  return {
+    now: Date.now,
+    roleSync: new RoleSyncService({
+      guilds,
+      managers,
+      staff: staffProfiles,
+      discord: input.discord,
+    }),
+    securityManagers: new SecurityManagerService({ guilds, managers }),
+    memberBan: {
+      authorize: authorizeGuardedAction,
+      staffProfiles,
+      rateLimits: new RateLimitStore(input.redis),
+      decisions: new PolicyDecisionRepository(input.database),
+      correlations: new ExecutionCorrelationStore(input.redis),
+      discord: input.discord,
+      createCorrelationId: input.createCorrelationId,
+    },
+  };
+}
+
 export async function startBot(
   envInput: Record<string, string | undefined> = process.env,
 ): Promise<Client> {
@@ -48,18 +84,12 @@ export async function startBot(
   const database = createDatabase(env.DATABASE_URL);
   const redis = createRedis(env.REDIS_URL);
   const discord = new DiscordJsAdapter(client);
-  const dependencies: CommandRouterDependencies = {
-    now: Date.now,
-    memberBan: {
-      authorize: authorizeGuardedAction,
-      staffProfiles: new StaffRepository(database),
-      rateLimits: new RateLimitStore(redis),
-      decisions: new PolicyDecisionRepository(database),
-      correlations: new ExecutionCorrelationStore(redis),
-      discord,
-      createCorrelationId: randomUUID,
-    },
-  };
+  const dependencies = createCommandRouterDependencies({
+    database,
+    redis,
+    discord,
+    createCorrelationId: randomUUID,
+  });
 
   installCommandRouter(client, dependencies);
   const ready = new Promise<Client<true>>((resolve) => {

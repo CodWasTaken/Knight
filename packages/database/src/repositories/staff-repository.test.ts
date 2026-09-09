@@ -141,4 +141,55 @@ describe('security persistence', () => {
     );
     expect(result.rows[0]).toEqual({ guild_id: '100', code: 'TEST_DENY' });
   });
+  it('creates an initial Staff Profile version atomically and reads it guild-scoped', async () => {
+    const created = await staff.createProfileWithInitialVersion({
+      guildId: '100',
+      name: 'Atomic Helper',
+      discordRoleId: 'role-atomic-helper',
+      rank: 12,
+      permissions: [],
+      actionPolicies: {},
+      createdBy: '1',
+    });
+
+    expect(created.profile.currentVersionId).toBe(created.version.id);
+    expect(created.version.version).toBe(1);
+    expect((await staff.getCurrentProfileVersion('100', created.profile.id))?.id).toBe(
+      created.version.id,
+    );
+    expect(await staff.getCurrentProfileVersion('200', created.profile.id)).toBeNull();
+  });
+
+  it('tracks active assignment sync status and deactivation by assignment id', async () => {
+    const created = await staff.createProfileWithInitialVersion({
+      guildId: '100',
+      name: 'Sync Moderator',
+      discordRoleId: 'role-sync-mod',
+      rank: 25,
+      permissions: [],
+      actionPolicies: {},
+      createdBy: '1',
+    });
+    const assignment = await staff.assign({
+      guildId: '100',
+      userId: 'sync-user',
+      profileId: created.profile.id,
+      actorUserId: '1',
+    });
+
+    expect(assignment.id).toBeTruthy();
+    expect(await staff.getActiveAssignment('100', 'sync-user')).toMatchObject({
+      id: assignment.id,
+      profileName: 'Sync Moderator',
+      discordRoleId: 'role-sync-mod',
+      profileRank: 25,
+      syncStatus: 'PENDING',
+    });
+    await staff.setAssignmentSyncStatus('100', assignment.id, 'NEEDS_REPAIR');
+    expect((await staff.getActiveAssignment('100', 'sync-user'))?.syncStatus).toBe('NEEDS_REPAIR');
+    expect((await staff.deactivateAssignment({ guildId: '100', userId: 'sync-user' }))?.id).toBe(
+      assignment.id,
+    );
+    expect(await staff.getActiveAssignment('100', 'sync-user')).toBeNull();
+  });
 });
