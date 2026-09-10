@@ -1,7 +1,7 @@
 # Knight Moderation + Dashboard Expansion Design
 
 **Date:** 2026-09-10
-**Status:** Approved design pending final spec review
+**Status:** Approved
 **Branch:** `feature/security-foundation`
 
 ## Goal
