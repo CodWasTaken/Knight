@@ -1,5 +1,6 @@
 export const ACTION_IDS = [
   'member.warn',
+  'member.warnings.view',
   'member.timeout',
   'member.kick',
   'member.ban',
