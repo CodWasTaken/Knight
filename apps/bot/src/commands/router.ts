@@ -1,4 +1,5 @@
 import { MessageFlags, type Interaction } from 'discord.js';
+import { executeDoctorCommand, type DoctorCommandDependencies } from './doctor.js';
 import { executeMemberBan, type MemberBanCommandDependencies } from './member/ban.js';
 import {
   executeSecurityManagerAdd,
@@ -25,11 +26,12 @@ export type CommandRouterDependencies = Readonly<{
     StaffInspectService;
   securityManagers: SecurityManagerGrantService & SecurityManagerRevokeService;
   setup: SetupCommandDependencies;
+  doctor: DoctorCommandDependencies;
   now: () => number;
 }>;
 
 const EPHEMERAL = MessageFlags.Ephemeral;
-const IMPLEMENTED_COMMANDS = new Set(['member', 'staff', 'security', 'setup']);
+const IMPLEMENTED_COMMANDS = new Set(['member', 'staff', 'security', 'setup', 'doctor']);
 
 export async function routeInteraction(
   interaction: Interaction,
@@ -51,6 +53,15 @@ export async function routeInteraction(
       content: 'Knight security-management commands can only be used inside a Discord server.',
       flags: EPHEMERAL,
     });
+    return;
+  }
+
+  if (interaction.commandName === 'doctor') {
+    const result = await executeDoctorCommand(
+      { guildId: interaction.guildId },
+      dependencies.doctor,
+    );
+    await interaction.reply({ content: result.content, flags: EPHEMERAL });
     return;
   }
 

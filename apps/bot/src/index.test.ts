@@ -23,6 +23,7 @@ describe('bot production composition', () => {
       database: {} as never,
       redis: {} as never,
       discord,
+      appUrl: 'https://knight.example.com',
       createCorrelationId: () => 'corr-1',
     });
 
@@ -31,5 +32,7 @@ describe('bot production composition', () => {
     expect(dependencies.setup.setup).toBeInstanceOf(SetupService);
     expect(dependencies.setup.migrations).toBeInstanceOf(GuardedMigrationService);
     expect(dependencies.memberBan.discord).toBe(discord);
+    expect(dependencies.doctor.discord).toBe(discord);
+    expect(dependencies.doctor.appUrl).toBe('https://knight.example.com');
   });
 });

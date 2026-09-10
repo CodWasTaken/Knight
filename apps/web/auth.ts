@@ -2,10 +2,11 @@ import NextAuth, { type NextAuthResult } from 'next-auth';
 import { configureAuthEnvironment, createAuthConfig } from './lib/auth-config';
 import { getWebRuntime } from './lib/server-runtime';
 
-const { database, env } = getWebRuntime();
-configureAuthEnvironment(env);
-
-const nextAuth: NextAuthResult = NextAuth(createAuthConfig(database, env));
+const nextAuth: NextAuthResult = NextAuth(() => {
+  const { database, env } = getWebRuntime();
+  configureAuthEnvironment(env);
+  return createAuthConfig(database, env);
+});
 
 export const handlers: NextAuthResult['handlers'] = nextAuth.handlers;
 export const auth: NextAuthResult['auth'] = nextAuth.auth;

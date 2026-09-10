@@ -51,6 +51,7 @@ export function createCommandRouterDependencies(input: {
   database: ReturnType<typeof createDatabase>;
   redis: ReturnType<typeof createRedis>;
   discord: DiscordActionPort;
+  appUrl: string;
   createCorrelationId: () => string;
 }): CommandRouterDependencies {
   const guilds = new GuildRepository(input.database);
@@ -66,6 +67,21 @@ export function createCommandRouterDependencies(input: {
       discord: input.discord,
     }),
     securityManagers: new SecurityManagerService({ guilds, managers }),
+    doctor: {
+      checkDatabase: async () => {
+        await input.database.pool.query('select 1');
+      },
+      checkMigrations: async () => {
+        await input.database.pool.query('select 1 from drizzle.__drizzle_migrations limit 1');
+      },
+      checkRedis: async () => {
+        await input.redis.ping();
+      },
+      guilds,
+      staff: staffProfiles,
+      discord: input.discord,
+      appUrl: input.appUrl,
+    },
     setup: {
       setup: new SetupService({
         guilds,
@@ -104,6 +120,7 @@ export async function startBot(
     database,
     redis,
     discord,
+    appUrl: env.APP_URL,
     createCorrelationId: randomUUID,
   });
 

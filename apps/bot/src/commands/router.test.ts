@@ -51,6 +51,15 @@ function makeRouterDependencies() {
       setup: { getState: vi.fn() },
       migrations: { previewBanGuard: vi.fn() },
     },
+    doctor: {
+      checkDatabase: vi.fn().mockResolvedValue(undefined),
+      checkMigrations: vi.fn().mockResolvedValue(undefined),
+      checkRedis: vi.fn().mockResolvedValue(undefined),
+      guilds: { get: vi.fn().mockResolvedValue({ id: '100', ownerId: '1', mode: 'OBSERVE' }) },
+      staff: { listProfiles: vi.fn().mockResolvedValue([]) },
+      discord: { getGuildState: vi.fn().mockRejectedValue(new Error('offline')) },
+      appUrl: 'https://knight.example.com',
+    },
     now: () => 12_345,
   };
 }
@@ -108,6 +117,21 @@ describe('routeInteraction', () => {
       expect.any(Object),
     );
     expect(reply).toHaveBeenCalledWith(expect.objectContaining({ flags: MessageFlags.Ephemeral }));
+  });
+
+  it('routes /doctor into the health report and replies ephemerally', async () => {
+    const dependencies = makeRouterDependencies();
+    const { interaction, reply } = fakeCommandInteraction('doctor', '');
+
+    await routeInteraction(interaction, dependencies);
+
+    expect(dependencies.doctor.checkDatabase).toHaveBeenCalledTimes(1);
+    expect(reply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: expect.stringContaining('Knight doctor'),
+        flags: MessageFlags.Ephemeral,
+      }),
+    );
   });
 
   it('routes /setup into the persistent setup status command and replies ephemerally', async () => {

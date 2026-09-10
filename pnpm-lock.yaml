@@ -242,6 +242,9 @@ importers:
       '@knight/discord':
         specifier: workspace:*
         version: link:../../packages/discord
+      '@knight/redis':
+        specifier: workspace:*
+        version: link:../../packages/redis
       '@knight/security':
         specifier: workspace:*
         version: link:../../packages/security
@@ -268,7 +271,17 @@ importers:
         specifier: ^19.2.0
         version: 19.2.7(@types/react@19.2.18)
 
-  apps/worker: {}
+  apps/worker:
+    dependencies:
+      '@knight/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+      '@knight/database':
+        specifier: workspace:*
+        version: link:../../packages/database
+      '@knight/redis':
+        specifier: workspace:*
+        version: link:../../packages/redis
 
   packages/config:
     dependencies:

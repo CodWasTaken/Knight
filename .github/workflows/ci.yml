@@ -1,7 +1,7 @@
 name: CI
 on:
   push:
-    branches: ["feature/security-foundation"]
+    branches: ['feature/security-foundation']
   pull_request:
 
 jobs:
@@ -14,13 +14,13 @@ jobs:
           POSTGRES_DB: knight_test
           POSTGRES_USER: knight
           POSTGRES_PASSWORD: knight
-        ports: ["5432:5432"]
+        ports: ['5432:5432']
         options: >-
           --health-cmd="pg_isready -U knight -d knight_test"
           --health-interval=5s --health-timeout=5s --health-retries=10
       redis:
         image: redis:8-alpine
-        ports: ["6379:6379"]
+        ports: ['6379:6379']
         options: >-
           --health-cmd="redis-cli ping"
           --health-interval=5s --health-timeout=5s --health-retries=10
@@ -29,7 +29,7 @@ jobs:
       REDIS_URL: redis://localhost:6379
       NODE_ENV: test
       DISCORD_TOKEN: test-token
-      DISCORD_CLIENT_ID: "123"
+      DISCORD_CLIENT_ID: '123'
       DISCORD_CLIENT_SECRET: test-secret
       AUTH_SECRET: 0123456789abcdef0123456789abcdef
       APP_URL: http://localhost:3000
@@ -40,8 +40,10 @@ jobs:
           node-version: 24.17.0
       - run: corepack enable
       - run: corepack prepare pnpm@12.4.0 --activate
-      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @knight/database exec drizzle-kit migrate
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+      - run: docker build --tag knight-ci .
