@@ -1,7 +1,6 @@
 import { PolicyDecision, type SecurityDecision } from '@knight/contracts';
 import { MessageFlags, type Interaction } from 'discord.js';
 import { describe, expect, it, vi } from 'vitest';
-import type { MemberBanCommandDependencies } from './member/ban.js';
 import { routeInteraction } from './router.js';
 
 const denied: SecurityDecision = {
@@ -12,25 +11,46 @@ const denied: SecurityDecision = {
   metadata: {},
 };
 
-function makeBanDependencies(): MemberBanCommandDependencies {
+const allowed: SecurityDecision = {
+  decision: PolicyDecision.Allow,
+  code: 'ALLOWED',
+  reason: 'Allowed.',
+  policyVersionId: 'version-1',
+  metadata: {},
+};
+
+function makeModerationDependencies(decision: SecurityDecision = denied) {
   return {
-    authorize: vi.fn().mockResolvedValue(denied),
+    authorize: vi.fn().mockResolvedValue(decision),
     staffProfiles: { getEffectiveProfile: vi.fn().mockResolvedValue(null) },
     rateLimits: { consume: vi.fn() },
     decisions: { record: vi.fn() },
-    correlations: { create: vi.fn() },
+    correlations: { create: vi.fn().mockResolvedValue(undefined) },
     discord: {
-      getGuildState: vi.fn(),
-      getMemberState: vi.fn(),
-      banMember: vi.fn(),
+      getGuildState: vi.fn().mockResolvedValue({
+        guildId: '100', ownerId: '42', knightUserId: '999',
+        knightRolePosition: 100, knightPermissions: 0n, roles: [],
+      }),
+      getMemberState: vi.fn().mockResolvedValue(null),
+      banMember: vi.fn(), kickMember: vi.fn(), timeoutMember: vi.fn(), unbanMember: vi.fn(),
+      sendDirectMessage: vi.fn(), fetchRecentMessages: vi.fn().mockResolvedValue([]),
+      deleteMessages: vi.fn().mockResolvedValue(0),
     },
+    warnings: { create: vi.fn(), setDmDeliveryStatus: vi.fn(), listForUser: vi.fn().mockResolvedValue([]) },
     createCorrelationId: vi.fn(() => 'corr-1'),
   };
 }
 
 function makeRouterDependencies() {
+  const moderation = makeModerationDependencies();
   return {
-    memberBan: makeBanDependencies(),
+    memberBan: moderation,
+    memberWarn: moderation,
+    memberWarnings: moderation,
+    memberTimeout: moderation,
+    memberKick: moderation,
+    memberUnban: moderation,
+    messagePurge: moderation,
     roleSync: {
       createProfile: vi.fn().mockResolvedValue({}),
       assignByReference: vi.fn().mockResolvedValue({ syncStatus: 'SYNCED' }),
@@ -82,11 +102,16 @@ function fakeCommandInteraction(
     isChatInputCommand: () => true,
     commandName,
     guildId,
+    channelId: 'channel-1',
     user: { id: '42' },
     client: { user: { id: '999' } },
     options: {
       getSubcommand: () => subcommand,
-      getUser: (name: string) => ({ id: options.users?.[name] ?? '77' }),
+      getUser: (name: string, required = false) => {
+        const id = options.users?.[name];
+        if (id !== undefined) return { id };
+        return required ? { id: '77' } : null;
+      },
       getString: (name: string) => options.strings?.[name] ?? '',
       getRole: (name: string) => ({ id: options.roles?.[name] ?? 'role-unknown' }),
       getInteger: (name: string) => options.integers?.[name] ?? 0,
@@ -284,5 +309,105 @@ describe('routeInteraction', () => {
 
     expect(dependencies.memberBan.authorize).not.toHaveBeenCalled();
     expect(dependencies.roleSync.createProfile).not.toHaveBeenCalled();
+  });
+});
+
+describe('moderation command routing', () => {
+  it('routes /member warn with member and reason', async () => {
+    const dependencies = makeRouterDependencies();
+    const { interaction, reply } = fakeCommandInteraction('member', 'warn', {
+      users: { user: '77' },
+      strings: { reason: 'Repeated spam' },
+    });
+
+    await routeInteraction(interaction, dependencies);
+
+    expect(dependencies.memberWarn.authorize).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'member.warn', targetId: '77', nowMs: 12_345 }),
+      expect.any(Object),
+    );
+    expect(reply).toHaveBeenCalledWith(expect.objectContaining({ flags: MessageFlags.Ephemeral }));
+  });
+
+  it('routes /member warnings into warning-history lookup', async () => {
+    const dependencies = makeRouterDependencies();
+    const { interaction } = fakeCommandInteraction('member', 'warnings', {
+      users: { user: '77' },
+    });
+
+    await routeInteraction(interaction, dependencies);
+
+    expect(dependencies.memberWarnings.warnings.listForUser).toHaveBeenCalledWith('100', '77');
+  });
+
+  it('routes /member timeout and parses the duration before mutation', async () => {
+    const dependencies = makeRouterDependencies();
+    dependencies.memberTimeout.authorize.mockResolvedValue(allowed);
+    const { interaction } = fakeCommandInteraction('member', 'timeout', {
+      users: { user: '77' },
+      strings: { duration: '1h', reason: 'Cooldown' },
+    });
+
+    await routeInteraction(interaction, dependencies);
+
+    expect(dependencies.memberTimeout.discord.timeoutMember).toHaveBeenCalledWith({
+      guildId: '100',
+      targetUserId: '77',
+      durationMs: 60 * 60_000,
+      reason: 'Cooldown',
+    });
+  });
+
+  it('routes /member kick through the shared moderation dependencies', async () => {
+    const dependencies = makeRouterDependencies();
+    dependencies.memberKick.authorize.mockResolvedValue(allowed);
+    const { interaction } = fakeCommandInteraction('member', 'kick', {
+      users: { user: '77' },
+      strings: { reason: 'Raid behavior' },
+    });
+
+    await routeInteraction(interaction, dependencies);
+    expect(dependencies.memberKick.discord.kickMember).toHaveBeenCalledWith({
+      guildId: '100',
+      targetUserId: '77',
+      reason: 'Raid behavior',
+    });
+  });
+
+  it('routes /member unban from the explicit Discord user ID', async () => {
+    const dependencies = makeRouterDependencies();
+    dependencies.memberUnban.authorize.mockResolvedValue(allowed);
+    const { interaction } = fakeCommandInteraction('member', 'unban', {
+      strings: { user_id: '123456789', reason: 'Appeal accepted' },
+    });
+
+    await routeInteraction(interaction, dependencies);
+
+    expect(dependencies.memberUnban.discord.unbanMember).toHaveBeenCalledWith({
+      guildId: '100',
+      targetUserId: '123456789',
+      reason: 'Appeal accepted',
+    });
+  });
+
+  it('routes /message purge with channel, count, and optional member filter', async () => {
+    const dependencies = makeRouterDependencies();
+    dependencies.messagePurge.authorize.mockResolvedValue(allowed);
+    const { interaction } = fakeCommandInteraction('message', 'purge', {
+      users: { user: '88' },
+      integers: { count: 25 },
+      strings: { reason: 'Channel cleanup' },
+    });
+
+    await routeInteraction(interaction, dependencies);
+
+    expect(dependencies.messagePurge.authorize).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'message.purge', targetId: '88' }),
+      expect.any(Object),
+    );
+    expect(dependencies.messagePurge.discord.fetchRecentMessages).toHaveBeenCalledWith({
+      channelId: 'channel-1',
+      limit: 25,
+    });
   });
 });

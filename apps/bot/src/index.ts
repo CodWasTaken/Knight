@@ -8,6 +8,7 @@ import {
   PolicyDecisionRepository,
   SecurityManagerRepository,
   StaffRepository,
+  WarningRepository,
 } from '@knight/database';
 import { DiscordJsAdapter, type DiscordActionPort } from '@knight/discord';
 import { closeRedis, createRedis, ExecutionCorrelationStore, RateLimitStore } from '@knight/redis';
@@ -77,6 +78,16 @@ export function createCommandRouterDependencies(input: {
   const guilds = new GuildRepository(input.database);
   const staffProfiles = new StaffRepository(input.database);
   const managers = new SecurityManagerRepository(input.database);
+  const warnings = new WarningRepository(input.database);
+  const moderation = {
+    authorize: authorizeGuardedAction,
+    staffProfiles,
+    rateLimits: new RateLimitStore(input.redis),
+    decisions: new PolicyDecisionRepository(input.database),
+    correlations: new ExecutionCorrelationStore(input.redis),
+    discord: input.discord,
+    createCorrelationId: input.createCorrelationId,
+  };
 
   return {
     now: Date.now,
@@ -116,15 +127,13 @@ export function createCommandRouterDependencies(input: {
         createMigrationId: input.createCorrelationId,
       }),
     },
-    memberBan: {
-      authorize: authorizeGuardedAction,
-      staffProfiles,
-      rateLimits: new RateLimitStore(input.redis),
-      decisions: new PolicyDecisionRepository(input.database),
-      correlations: new ExecutionCorrelationStore(input.redis),
-      discord: input.discord,
-      createCorrelationId: input.createCorrelationId,
-    },
+    memberBan: moderation,
+    memberWarn: { ...moderation, warnings },
+    memberWarnings: { staffProfiles, discord: input.discord, warnings },
+    memberTimeout: moderation,
+    memberKick: moderation,
+    memberUnban: moderation,
+    messagePurge: moderation,
   };
 }
 

@@ -1,3 +1,4 @@
+import { WarningRepository } from '@knight/database';
 import { describe, expect, it, vi } from 'vitest';
 import { SecurityManagerService } from './security/security-manager-service.js';
 import { GuardedMigrationService } from './setup/guarded-migration-service.js';
@@ -76,6 +77,15 @@ describe('bot production composition', () => {
     expect(dependencies.setup.setup).toBeInstanceOf(SetupService);
     expect(dependencies.setup.migrations).toBeInstanceOf(GuardedMigrationService);
     expect(dependencies.memberBan.discord).toBe(discord);
+    expect(dependencies.memberWarn.discord).toBe(discord);
+    expect(dependencies.memberTimeout.discord).toBe(discord);
+    expect(dependencies.memberKick.discord).toBe(discord);
+    expect(dependencies.memberUnban.discord).toBe(discord);
+    expect(dependencies.messagePurge.discord).toBe(discord);
+    expect(dependencies.memberWarn.staffProfiles).toBe(dependencies.memberBan.staffProfiles);
+    expect(dependencies.memberKick.rateLimits).toBe(dependencies.memberBan.rateLimits);
+    expect(dependencies.messagePurge.correlations).toBe(dependencies.memberBan.correlations);
+    expect(dependencies.memberWarnings.warnings).toBeInstanceOf(WarningRepository);
     expect(dependencies.doctor.discord).toBe(discord);
     expect(dependencies.doctor.appUrl).toBe('https://knight.example.com');
   });

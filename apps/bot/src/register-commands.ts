@@ -13,6 +13,50 @@ const member = new SlashCommandBuilder()
   .setDescription('Run guarded member moderation actions.')
   .addSubcommand((command) =>
     command
+      .setName('warn')
+      .setDescription('Issue a durable Knight warning.')
+      .addUserOption((option) =>
+        option.setName('user').setDescription('Member to warn.').setRequired(true),
+      )
+      .addStringOption((option) =>
+        option.setName('reason').setDescription('Moderation reason.').setRequired(true),
+      ),
+  )
+  .addSubcommand((command) =>
+    command
+      .setName('warnings')
+      .setDescription('View a member’s Knight warning history.')
+      .addUserOption((option) =>
+        option.setName('user').setDescription('Member whose warnings to view.').setRequired(true),
+      ),
+  )
+  .addSubcommand((command) =>
+    command
+      .setName('timeout')
+      .setDescription('Temporarily restrict a member through Knight.')
+      .addUserOption((option) =>
+        option.setName('user').setDescription('Member to timeout.').setRequired(true),
+      )
+      .addStringOption((option) =>
+        option.setName('duration').setDescription('Duration such as 10m, 1h, or 1d.').setRequired(true),
+      )
+      .addStringOption((option) =>
+        option.setName('reason').setDescription('Moderation reason.').setRequired(true),
+      ),
+  )
+  .addSubcommand((command) =>
+    command
+      .setName('kick')
+      .setDescription('Remove a member from the server through Knight.')
+      .addUserOption((option) =>
+        option.setName('user').setDescription('Member to kick.').setRequired(true),
+      )
+      .addStringOption((option) =>
+        option.setName('reason').setDescription('Moderation reason.').setRequired(true),
+      ),
+  )
+  .addSubcommand((command) =>
+    command
       .setName('ban')
       .setDescription('Ban a member through Knight policy checks.')
       .addUserOption((option) =>
@@ -20,6 +64,40 @@ const member = new SlashCommandBuilder()
       )
       .addStringOption((option) =>
         option.setName('reason').setDescription('Moderation reason.').setRequired(true),
+      ),
+  )
+  .addSubcommand((command) =>
+    command
+      .setName('unban')
+      .setDescription('Remove a Discord ban through Knight policy checks.')
+      .addStringOption((option) =>
+        option.setName('user_id').setDescription('Discord user ID to unban.').setRequired(true),
+      )
+      .addStringOption((option) =>
+        option.setName('reason').setDescription('Moderation reason.').setRequired(true),
+      ),
+  );
+
+const message = new SlashCommandBuilder()
+  .setName('message')
+  .setDescription('Run guarded message moderation actions.')
+  .addSubcommand((command) =>
+    command
+      .setName('purge')
+      .setDescription('Delete recent messages through Knight policy checks.')
+      .addIntegerOption((option) =>
+        option
+          .setName('count')
+          .setDescription('Number of recent messages to inspect, from 1 to 100.')
+          .setMinValue(1)
+          .setMaxValue(100)
+          .setRequired(true),
+      )
+      .addUserOption((option) =>
+        option.setName('user').setDescription('Optional member filter.'),
+      )
+      .addStringOption((option) =>
+        option.setName('reason').setDescription('Optional moderation reason.'),
       ),
   );
 
@@ -92,7 +170,7 @@ const security = new SlashCommandBuilder()
       ),
   );
 
-export const KNIGHT_COMMANDS = [doctor, setup, member, staff, security] as const;
+export const KNIGHT_COMMANDS = [doctor, setup, member, message, staff, security] as const;
 
 export async function registerCommands(client: Client<true>): Promise<void> {
   await client.application.commands.set(KNIGHT_COMMANDS.map((command) => command.toJSON()));
