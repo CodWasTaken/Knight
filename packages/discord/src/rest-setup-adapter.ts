@@ -35,13 +35,12 @@ export class DiscordRestSetupAdapter {
   public constructor(private readonly rest: DiscordRestClient) {}
 
   public async getGuildState(guildId: string): Promise<DiscordGuildState> {
-    const [userRaw, guildRaw, memberRaw, rolesRaw] = await Promise.all([
-      this.rest.get(Routes.user()),
+    const user = asUser(await this.rest.get(Routes.user()));
+    const [guildRaw, memberRaw, rolesRaw] = await Promise.all([
       this.rest.get(Routes.guild(guildId)),
-      this.rest.get(Routes.guildMember(guildId)),
+      this.rest.get(Routes.guildMember(guildId, user.id)),
       this.rest.get(Routes.guildRoles(guildId)),
     ]);
-    const user = asUser(userRaw);
     const guild = asGuild(guildRaw);
     const member = asMember(memberRaw);
     const roles = asRoles(rolesRaw);

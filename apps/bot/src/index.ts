@@ -20,6 +20,26 @@ import { SecurityManagerService } from './security/security-manager-service.js';
 import { GuardedMigrationService } from './setup/guarded-migration-service.js';
 import { SetupService } from './setup/setup-service.js';
 import { RoleSyncService } from './staff/role-sync-service.js';
+export async function syncConnectedGuildOwners(
+  client: Client<true>,
+  guilds: Pick<GuildRepository, 'createOrUpdateOwner'>,
+): Promise<void> {
+  for (const guild of client.guilds.cache.values()) {
+    await guilds.createOrUpdateOwner(guild.id, guild.ownerId);
+  }
+}
+
+export function installGuildOwnerSync(
+  client: Pick<Client, 'on'>,
+  guilds: Pick<GuildRepository, 'createOrUpdateOwner'>,
+): void {
+  client.on(Events.GuildCreate, (guild) => {
+    void guilds.createOrUpdateOwner(guild.id, guild.ownerId).catch(() => {
+      console.error('Knight could not persist a newly connected guild.');
+    });
+  });
+}
+
 async function replyWithSafeCommandError(interaction: Interaction): Promise<void> {
   if (!interaction.isRepliable()) return;
   const payload = {
@@ -116,6 +136,8 @@ export async function startBot(
   const database = createDatabase(env.DATABASE_URL);
   const redis = createRedis(env.REDIS_URL);
   const discord = new DiscordJsAdapter(client);
+  const guildRepository = new GuildRepository(database);
+  installGuildOwnerSync(client, guildRepository);
   const dependencies = createCommandRouterDependencies({
     database,
     redis,
@@ -131,6 +153,7 @@ export async function startBot(
   try {
     await client.login(env.DISCORD_TOKEN);
     const readyClient = await ready;
+    await syncConnectedGuildOwners(readyClient, guildRepository);
     await registerCommands(readyClient);
     console.info(`Knight connected as ${readyClient.user.tag}.`);
     return readyClient;

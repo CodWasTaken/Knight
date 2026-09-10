@@ -12,7 +12,7 @@ describe('DiscordRestSetupAdapter', () => {
     const get = vi.fn().mockImplementation(async (route: string) => {
       if (route === Routes.user()) return { id: 'knight' };
       if (route === Routes.guild('100')) return { id: '100', owner_id: 'owner' };
-      if (route === Routes.guildMember('100')) return { roles: ['role-knight'] };
+      if (route === Routes.guildMember('100', 'knight')) return { roles: ['role-knight'] };
       if (route === Routes.guildRoles('100')) {
         return [
           { id: '100', position: 0, permissions: '0' },

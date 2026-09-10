@@ -1,17 +1,21 @@
 FROM node:24.17.0-bookworm-slim
 
+ENV COREPACK_HOME=/home/node/.cache/node/corepack
+
 WORKDIR /app
 
-RUN corepack enable \
-  && corepack prepare pnpm@12.4.0 --activate
+RUN mkdir -p "$COREPACK_HOME" \
+  && chown -R node:node /home/node/.cache /app \
+  && corepack enable
 
-COPY . .
+COPY --chown=node:node . .
 
-RUN pnpm install --frozen-lockfile \
+USER node
+
+RUN corepack prepare pnpm@12.4.0 --activate \
+  && pnpm install --frozen-lockfile \
   && pnpm build
 
 ENV NODE_ENV=production
-
-USER node
 
 CMD ["pnpm", "--filter", "@knight/web", "start"]
