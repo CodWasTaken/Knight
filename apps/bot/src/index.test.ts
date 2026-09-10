@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { SecurityManagerService } from './security/security-manager-service.js';
+import { GuardedMigrationService } from './setup/guarded-migration-service.js';
+import { SetupService } from './setup/setup-service.js';
 import { RoleSyncService } from './staff/role-sync-service.js';
 import { createCommandRouterDependencies } from './index.js';
 
@@ -26,6 +28,8 @@ describe('bot production composition', () => {
 
     expect(dependencies.roleSync).toBeInstanceOf(RoleSyncService);
     expect(dependencies.securityManagers).toBeInstanceOf(SecurityManagerService);
+    expect(dependencies.setup.setup).toBeInstanceOf(SetupService);
+    expect(dependencies.setup.migrations).toBeInstanceOf(GuardedMigrationService);
     expect(dependencies.memberBan.discord).toBe(discord);
   });
 });

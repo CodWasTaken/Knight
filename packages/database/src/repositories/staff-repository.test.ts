@@ -89,15 +89,71 @@ describe('security persistence', () => {
 
   it('stores setup state and guild mode per guild', async () => {
     expect((await guilds.getSetupState('100'))?.step).toBe('WELCOME');
+    await guilds.updateSetupState('100', 'HEALTH', ['WELCOME']);
+    expect(await guilds.getSetupState('100')).toMatchObject({
+      step: 'HEALTH',
+      completedSteps: ['WELCOME'],
+    });
     await guilds.setMode('100', GuildMode.Test);
     expect((await guilds.get('100'))?.mode).toBe(GuildMode.Test);
     expect((await guilds.get('200'))?.mode).toBe(GuildMode.Observe);
+    await guilds.updateSetupState('100', 'WELCOME', []);
+  });
+
+  it('stores Guarded category state and returns only the latest permission snapshot migration', async () => {
+    const firstMigration = '11111111-1111-4111-8111-111111111111';
+    const latestMigration = '22222222-2222-4222-8222-222222222222';
+    await guilds.setGuardedBanState('100', true, GuildMode.Guarded, '1');
+    expect(await guilds.getGuardedCategory('100', 'MEMBER_BAN')).toMatchObject({
+      enabled: true,
+      updatedBy: '1',
+    });
+    expect((await guilds.get('100'))?.mode).toBe(GuildMode.Guarded);
+    await guilds.setGuardedBanState('100', false, GuildMode.Test, '1');
+    expect((await guilds.get('100'))?.mode).toBe(GuildMode.Test);
+
+    await guilds.saveRolePermissionSnapshot({
+      guildId: '100',
+      migrationId: firstMigration,
+      roleId: 'old-role',
+      permissions: '8',
+    });
+    await guilds.saveRolePermissionSnapshot({
+      guildId: '100',
+      migrationId: latestMigration,
+      roleId: 'role-a',
+      permissions: '12',
+    });
+    await guilds.saveRolePermissionSnapshot({
+      guildId: '100',
+      migrationId: latestMigration,
+      roleId: 'role-b',
+      permissions: '16',
+    });
+
+    expect(await guilds.getLatestRolePermissionSnapshots('100')).toEqual([
+      expect.objectContaining({
+        migrationId: latestMigration,
+        roleId: 'role-a',
+        permissions: '12',
+      }),
+      expect.objectContaining({
+        migrationId: latestMigration,
+        roleId: 'role-b',
+        permissions: '16',
+      }),
+    ]);
+    expect(await guilds.getLatestRolePermissionSnapshots('200')).toEqual([]);
   });
 
   it('scopes Security Managers to a guild', async () => {
     await managers.grant({ guildId: '100', userId: '77', grantedBy: '1' });
     expect(await managers.isSecurityManager('100', '77')).toBe(true);
     expect(await managers.isSecurityManager('200', '77')).toBe(false);
+    expect(await managers.listSecurityManagers('100')).toEqual([
+      expect.objectContaining({ userId: '77', grantedBy: '1' }),
+    ]);
+    expect(await managers.listSecurityManagers('200')).toEqual([]);
     await managers.revoke('100', '77');
     expect(await managers.isSecurityManager('100', '77')).toBe(false);
   });

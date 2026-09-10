@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import type { Database } from '../client.js';
 import { securityManagers } from '../schema/index.js';
 
@@ -29,5 +29,13 @@ export class SecurityManagerRepository {
       .limit(1);
 
     return manager !== undefined;
+  }
+
+  public async listSecurityManagers(guildId: string) {
+    return this.database.db
+      .select()
+      .from(securityManagers)
+      .where(eq(securityManagers.guildId, guildId))
+      .orderBy(asc(securityManagers.userId));
   }
 }

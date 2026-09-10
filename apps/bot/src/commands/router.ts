@@ -15,6 +15,7 @@ import {
 } from './staff/create-profile.js';
 import { executeStaffInspect, type StaffInspectService } from './staff/inspect.js';
 import { executeStaffRemove, type StaffRemoveService } from './staff/remove.js';
+import { executeSetupCommand, type SetupCommandDependencies } from './setup.js';
 
 export type CommandRouterDependencies = Readonly<{
   memberBan: MemberBanCommandDependencies;
@@ -23,11 +24,12 @@ export type CommandRouterDependencies = Readonly<{
     StaffRemoveService &
     StaffInspectService;
   securityManagers: SecurityManagerGrantService & SecurityManagerRevokeService;
+  setup: SetupCommandDependencies;
   now: () => number;
 }>;
 
 const EPHEMERAL = MessageFlags.Ephemeral;
-const IMPLEMENTED_COMMANDS = new Set(['member', 'staff', 'security']);
+const IMPLEMENTED_COMMANDS = new Set(['member', 'staff', 'security', 'setup']);
 
 export async function routeInteraction(
   interaction: Interaction,
@@ -49,6 +51,15 @@ export async function routeInteraction(
       content: 'Knight security-management commands can only be used inside a Discord server.',
       flags: EPHEMERAL,
     });
+    return;
+  }
+
+  if (interaction.commandName === 'setup') {
+    const result = await executeSetupCommand(
+      { guildId: interaction.guildId, actorUserId: interaction.user.id },
+      dependencies.setup,
+    );
+    await interaction.reply({ content: result.content, flags: EPHEMERAL });
     return;
   }
 

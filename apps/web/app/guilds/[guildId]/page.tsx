@@ -18,11 +18,15 @@ export default async function GuildHome({
           records before this dashboard was shown.
         </p>
         <p className="muted">
-          Staff policy editing is available now. Guarded setup controls arrive in the next
-          foundation tasks.
+          Staff policy editing and the persistent Observe → Test → Guarded setup workflow are
+          available from this dashboard.
         </p>
         <Link className="inlineAction" href={`/guilds/${guildId}/staff`}>
           Manage Staff Profiles →
+        </Link>
+        <br />
+        <Link className="inlineAction" href={`/guilds/${guildId}/setup`}>
+          Continue security setup →
         </Link>
       </section>
     </main>

@@ -2,6 +2,9 @@
   "name": "@knight/bot",
   "private": true,
   "type": "module",
+  "exports": {
+    "./setup": "./src/setup/index.ts"
+  },
   "scripts": {
     "lint": "eslint src",
     "typecheck": "tsc --noEmit -p tsconfig.json",
@@ -17,6 +20,7 @@
     "@knight/discord": "workspace:*",
     "@knight/redis": "workspace:*",
     "@knight/security": "workspace:*",
+    "discord-api-types": "0.38.55",
     "discord.js": "14.27.0"
   },
   "devDependencies": {

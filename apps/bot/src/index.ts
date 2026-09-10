@@ -17,6 +17,8 @@ import { routeInteraction, type CommandRouterDependencies } from './commands/rou
 import { createDiscordClient } from './discord-client.js';
 import { registerCommands } from './register-commands.js';
 import { SecurityManagerService } from './security/security-manager-service.js';
+import { GuardedMigrationService } from './setup/guarded-migration-service.js';
+import { SetupService } from './setup/setup-service.js';
 import { RoleSyncService } from './staff/role-sync-service.js';
 async function replyWithSafeCommandError(interaction: Interaction): Promise<void> {
   if (!interaction.isRepliable()) return;
@@ -64,6 +66,20 @@ export function createCommandRouterDependencies(input: {
       discord: input.discord,
     }),
     securityManagers: new SecurityManagerService({ guilds, managers }),
+    setup: {
+      setup: new SetupService({
+        guilds,
+        managers,
+        staff: staffProfiles,
+        discord: input.discord,
+      }),
+      migrations: new GuardedMigrationService({
+        guilds,
+        staff: staffProfiles,
+        discord: input.discord,
+        createMigrationId: input.createCorrelationId,
+      }),
+    },
     memberBan: {
       authorize: authorizeGuardedAction,
       staffProfiles,

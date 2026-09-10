@@ -17,6 +17,7 @@ export type DiscordGuildState = Readonly<{
   ownerId: string;
   knightUserId: string;
   knightRolePosition: number;
+  knightPermissions: bigint;
   roles: readonly DiscordRoleState[];
 }>;
 export interface DiscordActionPort {

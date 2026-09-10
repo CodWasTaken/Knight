@@ -72,6 +72,7 @@ export class DiscordJsAdapter implements DiscordActionPort {
       ownerId: guild.ownerId,
       knightUserId: knightMember.id,
       knightRolePosition: knightMember.roles.highest.position,
+      knightPermissions: knightMember.permissions.bitfield,
       roles: [...roles.values()].map((role) => ({
         roleId: role.id,
         position: role.position,

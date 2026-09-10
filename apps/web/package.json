@@ -12,9 +12,11 @@
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.11.3",
+    "@knight/bot": "workspace:*",
     "@knight/config": "workspace:*",
     "@knight/contracts": "workspace:*",
     "@knight/database": "workspace:*",
+    "@knight/discord": "workspace:*",
     "@knight/security": "workspace:*",
     "next": "16.3.3",
     "next-auth": "5.0.0-beta.32",

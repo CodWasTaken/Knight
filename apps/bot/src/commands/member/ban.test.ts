@@ -53,6 +53,7 @@ function makeDependencies(decision: SecurityDecision = allowDecision) {
         ownerId: '1',
         knightUserId: '999',
         knightRolePosition: 100,
+        knightPermissions: 0n,
         roles: [],
       }),
       getMemberState: vi.fn().mockResolvedValue(null),

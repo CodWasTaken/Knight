@@ -211,6 +211,9 @@ importers:
       '@knight/security':
         specifier: workspace:*
         version: link:../../packages/security
+      discord-api-types:
+        specifier: 0.38.55
+        version: 0.38.55
       discord.js:
         specifier: 14.27.0
         version: 14.27.0
@@ -224,6 +227,9 @@ importers:
       '@auth/drizzle-adapter':
         specifier: ^1.11.3
         version: 1.11.3
+      '@knight/bot':
+        specifier: workspace:*
+        version: link:../bot
       '@knight/config':
         specifier: workspace:*
         version: link:../../packages/config
@@ -233,6 +239,9 @@ importers:
       '@knight/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@knight/discord':
+        specifier: workspace:*
+        version: link:../../packages/discord
       '@knight/security':
         specifier: workspace:*
         version: link:../../packages/security
@@ -293,9 +302,15 @@ importers:
 
   packages/discord:
     dependencies:
+      '@discordjs/rest':
+        specifier: 2.6.3
+        version: 2.6.3
       '@knight/contracts':
         specifier: workspace:*
         version: link:../contracts
+      discord-api-types:
+        specifier: 0.38.55
+        version: 0.38.55
       discord.js:
         specifier: 14.27.0
         version: 14.27.0

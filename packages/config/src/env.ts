@@ -18,6 +18,8 @@ const WebEnvSchema = EnvSchema.pick({
   AUTH_SECRET: true,
   APP_URL: true,
   DATABASE_URL: true,
+}).extend({
+  DISCORD_TOKEN: EnvSchema.shape.DISCORD_TOKEN.optional(),
 });
 
 export type KnightEnv = z.infer<typeof EnvSchema>;

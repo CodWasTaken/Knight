@@ -9,7 +9,9 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@discordjs/rest": "2.6.3",
     "@knight/contracts": "workspace:*",
+    "discord-api-types": "0.38.55",
     "discord.js": "14.27.0"
   }
 }

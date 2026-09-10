@@ -47,6 +47,10 @@ function makeRouterDependencies() {
       grant: vi.fn().mockResolvedValue(undefined),
       revoke: vi.fn().mockResolvedValue(undefined),
     },
+    setup: {
+      setup: { getState: vi.fn() },
+      migrations: { previewBanGuard: vi.fn() },
+    },
     now: () => 12_345,
   };
 }
@@ -104,6 +108,34 @@ describe('routeInteraction', () => {
       expect.any(Object),
     );
     expect(reply).toHaveBeenCalledWith(expect.objectContaining({ flags: MessageFlags.Ephemeral }));
+  });
+
+  it('routes /setup into the persistent setup status command and replies ephemerally', async () => {
+    const dependencies = makeRouterDependencies();
+    dependencies.setup.setup.getState.mockResolvedValue({
+      mode: 'OBSERVE',
+      step: 'WELCOME',
+      completedSteps: [],
+      profileCount: 0,
+      profileReady: false,
+      securityManagerCount: 0,
+      securityManagerIds: [],
+      manageRolesReady: true,
+      hierarchyHealthy: true,
+      blockingRoleIds: [],
+      nextAction: 'Continue setup to HEALTH.',
+    });
+    const { interaction, reply } = fakeCommandInteraction('setup', '');
+
+    await routeInteraction(interaction, dependencies);
+
+    expect(dependencies.setup.setup.getState).toHaveBeenCalledWith('100', '42');
+    expect(reply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: expect.stringContaining('Knight setup status'),
+        flags: MessageFlags.Ephemeral,
+      }),
+    );
   });
 
   it('routes /staff create-profile with the selected role and rank', async () => {

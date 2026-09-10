@@ -31,5 +31,18 @@ describe('parseEnv', () => {
     });
 
     expect(env.NODE_ENV).toBe('test');
+    expect(env.DISCORD_TOKEN).toBeUndefined();
+  });
+
+  it('preserves an optional bot token for live setup operations when configured', () => {
+    const env = parseWebEnv({
+      DISCORD_CLIENT_ID: '123',
+      DISCORD_CLIENT_SECRET: 'secret',
+      AUTH_SECRET: 'x'.repeat(32),
+      APP_URL: 'http://localhost:3000',
+      DATABASE_URL: 'postgres://knight:knight@localhost:5432/knight',
+      DISCORD_TOKEN: 'setup-token',
+    });
+    expect(env.DISCORD_TOKEN).toBe('setup-token');
   });
 });
