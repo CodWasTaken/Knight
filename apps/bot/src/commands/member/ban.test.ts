@@ -117,8 +117,8 @@ describe('executeMemberBan', () => {
     );
 
     await executeMemberBan(input, deps);
-    expect(observed?.target.elevatedUnregistered).toBe(true);
-    expect(observed?.target.knightRank).toBeNull();
+    expect(observed?.target!.elevatedUnregistered).toBe(true);
+    expect(observed?.target!.knightRank).toBeNull();
   });
 
   it('defaults a missing action policy to disabled', async () => {

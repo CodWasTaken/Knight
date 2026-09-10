@@ -1,42 +1,10 @@
-import type { ActionPolicy, SecurityDecision, StaffProfileSnapshot } from '@knight/contracts';
-import { PolicyDecision, ProtectionLevel } from '@knight/contracts';
-import type { StaffProfileVersionRecord, StaffRepository } from '@knight/database';
+import type { SecurityDecision } from '@knight/contracts';
+import { PolicyDecision } from '@knight/contracts';
 import type { DiscordActionPort } from '@knight/discord';
-import type { ExecutionCorrelationStore } from '@knight/redis';
-import type {
-  authorizeGuardedAction,
-  DecisionLogPort,
-  GuardedActionPorts,
-  GuardedActionRequest,
-  RateLimitPort,
-  StaffStatePort,
-} from '@knight/security';
-import { PermissionsBitField } from 'discord.js';
-
-const DISABLED_POLICY: ActionPolicy = {
-  enabled: false,
-  unlimited: false,
-  rateWindows: [],
-};
-
-const OWNER_POLICY: ActionPolicy = {
-  enabled: true,
-  unlimited: true,
-  rateWindows: [],
-};
-
-const ELEVATED_DISCORD_PERMISSION_MASK = [
-  PermissionsBitField.Flags.Administrator,
-  PermissionsBitField.Flags.BanMembers,
-  PermissionsBitField.Flags.KickMembers,
-  PermissionsBitField.Flags.ModerateMembers,
-  PermissionsBitField.Flags.ManageGuild,
-  PermissionsBitField.Flags.ManageRoles,
-  PermissionsBitField.Flags.ManageChannels,
-  PermissionsBitField.Flags.ManageWebhooks,
-  PermissionsBitField.Flags.ManageMessages,
-  PermissionsBitField.Flags.ViewAuditLog,
-].reduce((mask, permission) => mask | permission, 0n);
+import {
+  executeModerationAction,
+  type ModerationExecutorDependencies,
+} from '../../moderation/moderation-executor.js';
 
 export type MemberBanCommandInput = Readonly<{
   guildId: string;
@@ -47,93 +15,15 @@ export type MemberBanCommandInput = Readonly<{
   nowMs: number;
 }>;
 
-export type MemberBanCommandDependencies = Readonly<{
-  authorize: typeof authorizeGuardedAction;
-  staffProfiles: Pick<StaffRepository, 'getEffectiveProfile'>;
-  rateLimits: RateLimitPort;
-  decisions: DecisionLogPort;
-  correlations: Pick<ExecutionCorrelationStore, 'create'>;
-  discord: Pick<DiscordActionPort, 'getGuildState' | 'getMemberState' | 'banMember'>;
-  createCorrelationId: () => string;
-}>;
+export type MemberBanCommandDependencies = ModerationExecutorDependencies &
+  Readonly<{
+    discord: ModerationExecutorDependencies['discord'] & Pick<DiscordActionPort, 'banMember'>;
+  }>;
 
 export type MemberBanCommandResult = Readonly<{
   executed: boolean;
   content: string;
 }>;
-
-function toProfileSnapshot(
-  guildId: string,
-  profile: StaffProfileVersionRecord | null,
-): StaffProfileSnapshot | null {
-  if (profile === null) return null;
-  if (
-    profile.guildId !== guildId ||
-    profile.discordRoleId === undefined ||
-    profile.rank === undefined
-  ) {
-    throw new Error('Incomplete or cross-guild Staff Profile state');
-  }
-
-  return {
-    guildId,
-    profileId: profile.profileId,
-    profileVersionId: profile.id,
-    discordRoleId: profile.discordRoleId,
-    rank: profile.rank,
-    permissions: profile.permissions,
-    actionPolicies: profile.actionPolicies,
-  };
-}
-
-function hasElevatedDiscordAuthority(permissions: bigint): boolean {
-  return (permissions & ELEVATED_DISCORD_PERMISSION_MASK) !== 0n;
-}
-
-function createStaffStatePort(dependencies: MemberBanCommandDependencies): StaffStatePort {
-  return {
-    async getContext(request) {
-      const guild = await dependencies.discord.getGuildState(request.guildId);
-      const [actorProfileRecord, targetProfileRecord, targetDiscord] = await Promise.all([
-        dependencies.staffProfiles.getEffectiveProfile(request.guildId, request.actorUserId),
-        dependencies.staffProfiles.getEffectiveProfile(request.guildId, request.targetId),
-        dependencies.discord.getMemberState(request.guildId, request.targetId),
-      ]);
-
-      const actorProfile = toProfileSnapshot(request.guildId, actorProfileRecord);
-      const targetProfile = toProfileSnapshot(request.guildId, targetProfileRecord);
-      const actorIsOwner = guild.ownerId === request.actorUserId;
-      const targetIsOwner = guild.ownerId === request.targetId;
-      const elevatedUnregistered =
-        targetProfile === null &&
-        targetDiscord !== null &&
-        hasElevatedDiscordAuthority(targetDiscord.permissions);
-      const actionPolicy = actorIsOwner
-        ? OWNER_POLICY
-        : (actorProfile?.actionPolicies[request.action] ?? DISABLED_POLICY);
-
-      return {
-        action: request.action,
-        actor: {
-          userId: request.actorUserId,
-          isGuildOwner: actorIsOwner,
-          profile: actorProfile,
-          temporaryGrants: [],
-          temporaryRestrictions: [],
-        },
-        target: {
-          userId: request.targetId,
-          isGuildOwner: targetIsOwner,
-          knightRank: targetProfile?.rank ?? null,
-          elevatedUnregistered,
-          protectionLevel: ProtectionLevel.Normal,
-        },
-        emergency: { memberModerationLocked: false },
-        actionPolicy,
-      };
-    },
-  };
-}
 
 function formatRateLimitDecision(decision: SecurityDecision, nowMs: number): string | null {
   const rate = decision.metadata.rate;
@@ -186,75 +76,55 @@ function formatDecision(decision: SecurityDecision, nowMs: number): string {
   }
   return `Ban denied: ${decision.reason}`;
 }
+
 export async function executeMemberBan(
   input: MemberBanCommandInput,
   dependencies: MemberBanCommandDependencies,
 ): Promise<MemberBanCommandResult> {
-  const request: GuardedActionRequest = {
-    guildId: input.guildId,
-    actorUserId: input.actorUserId,
-    action: 'member.ban',
-    targetId: input.targetUserId,
-    nowMs: input.nowMs,
-  };
-  const ports: GuardedActionPorts = {
-    staffState: createStaffStatePort(dependencies),
-    rateLimits: dependencies.rateLimits,
-    decisions: dependencies.decisions,
-  };
-
-  let decision: SecurityDecision;
-  try {
-    decision = await dependencies.authorize(request, ports);
-  } catch {
-    return {
-      executed: false,
-      content:
-        'Ban denied: Knight could not evaluate security policy safely. No Discord action was performed.',
-    };
-  }
-
-  if (decision.decision !== PolicyDecision.Allow) {
-    return { executed: false, content: formatDecision(decision, input.nowMs) };
-  }
-  const correlationId = dependencies.createCorrelationId();
-  try {
-    await dependencies.correlations.create(
-      {
-        id: correlationId,
-        guildId: input.guildId,
-        requestedByUserId: input.actorUserId,
-        action: 'member.ban',
-        targetId: input.targetUserId,
-        expectedAuditActorBotId: input.knightBotUserId,
-        createdAtMs: input.nowMs,
-      },
-      60_000,
-    );
-  } catch {
-    return {
-      executed: false,
-      content:
-        'Ban denied: Knight could not create the required execution correlation. No Discord action was performed.',
-    };
-  }
-
-  try {
-    await dependencies.discord.banMember({
+  const result = await executeModerationAction(
+    {
       guildId: input.guildId,
+      actorUserId: input.actorUserId,
       targetUserId: input.targetUserId,
-      reason: input.reason,
-    });
-  } catch {
-    return {
-      executed: false,
-      content:
-        'Ban was authorized but Discord rejected the mutation. The attempted action still counts toward your security limits.',
-    };
-  }
+      knightBotUserId: input.knightBotUserId,
+      action: 'member.ban',
+      nowMs: input.nowMs,
+      correlation: 'required',
+    },
+    dependencies,
+    () =>
+      dependencies.discord.banMember({
+        guildId: input.guildId,
+        targetUserId: input.targetUserId,
+        reason: input.reason,
+      }),
+  );
 
-  return {
-    executed: true,
-    content: `Banned <@${input.targetUserId}> through Knight.`,
-  };
+  switch (result.kind) {
+    case 'DENIED':
+      return { executed: false, content: formatDecision(result.decision, input.nowMs) };
+    case 'SECURITY_UNAVAILABLE':
+      return {
+        executed: false,
+        content:
+          'Ban denied: Knight could not evaluate security policy safely. No Discord action was performed.',
+      };
+    case 'CORRELATION_UNAVAILABLE':
+      return {
+        executed: false,
+        content:
+          'Ban denied: Knight could not create the required execution correlation. No Discord action was performed.',
+      };
+    case 'MUTATION_FAILED':
+      return {
+        executed: false,
+        content:
+          'Ban was authorized but Discord rejected the mutation. The attempted action still counts toward your security limits.',
+      };
+    case 'EXECUTED':
+      return {
+        executed: true,
+        content: `Banned <@${input.targetUserId}> through Knight.`,
+      };
+  }
 }

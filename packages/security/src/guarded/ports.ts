@@ -5,7 +5,7 @@ export type GuardedActionRequest = Readonly<{
   guildId: string;
   actorUserId: string;
   action: ActionId;
-  targetId: string;
+  targetId: string | null;
   nowMs: number;
 }>;
 
