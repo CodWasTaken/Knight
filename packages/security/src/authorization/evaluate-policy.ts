@@ -8,6 +8,7 @@ const MEMBER_MODERATION_ACTIONS = new Set([
   'member.kick',
   'member.ban',
   'member.unban',
+  'message.purge',
 ]);
 
 function makeDecision(
@@ -35,7 +36,7 @@ export function evaluatePolicy(context: AuthorizationContext): SecurityDecision 
     );
   }
 
-  if (context.target.isGuildOwner) {
+  if (context.target?.isGuildOwner) {
     return makeDecision(
       context,
       PolicyDecision.Deny,
@@ -72,7 +73,7 @@ export function evaluatePolicy(context: AuthorizationContext): SecurityDecision 
     );
   }
 
-  if (!context.actor.isGuildOwner) {
+  if (!context.actor.isGuildOwner && context.target !== null) {
     if (context.target.elevatedUnregistered && context.target.knightRank === null) {
       return makeDecision(
         context,
@@ -97,8 +98,9 @@ export function evaluatePolicy(context: AuthorizationContext): SecurityDecision 
   }
 
   if (
-    context.target.protectionLevel === ProtectionLevel.Critical ||
-    context.target.protectionLevel === ProtectionLevel.Immutable
+    context.target !== null &&
+    (context.target.protectionLevel === ProtectionLevel.Critical ||
+      context.target.protectionLevel === ProtectionLevel.Immutable)
   ) {
     return makeDecision(
       context,

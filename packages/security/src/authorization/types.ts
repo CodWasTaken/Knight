@@ -22,6 +22,6 @@ export type AuthorizationEmergencyState = Readonly<{
 export type AuthorizationContext = Readonly<{
   action: ActionId;
   actor: AuthorizationActor;
-  target: AuthorizationTarget;
+  target: AuthorizationTarget | null;
   emergency: AuthorizationEmergencyState;
 }>;

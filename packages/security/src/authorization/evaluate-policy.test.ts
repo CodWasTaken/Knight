@@ -40,13 +40,50 @@ function expectDecision(input: AuthorizationContext, decision: PolicyDecision, c
 }
 
 describe('evaluatePolicy', () => {
+  const hierarchyActions = [
+    'member.warn',
+    'member.timeout',
+    'member.kick',
+    'member.ban',
+    'member.unban',
+    'message.purge',
+  ] as const;
+
+  it.each(hierarchyActions)('denies %s against an equal-ranked Knight target', (action) => {
+    const actorProfile = { ...moderator, permissions: [action] };
+    expectDecision(
+      context({
+        action,
+        actor: { ...context().actor, profile: actorProfile },
+        target: { ...context().target!, knightRank: 20 },
+      }),
+      PolicyDecision.Deny,
+      'TARGET_OUTRANKS_ACTOR',
+    );
+  });
+
+  it('allows resource-scoped purge authorization without a member target', () => {
+    expectDecision(
+      context({
+        action: 'message.purge',
+        actor: {
+          ...context().actor,
+          profile: { ...moderator, permissions: ['message.purge'] },
+        },
+        target: null as never,
+      }),
+      PolicyDecision.Allow,
+      'ALLOWED',
+    );
+  });
+
   it('allows a moderator to ban a lower-ranked member', () => {
     expectDecision(context(), PolicyDecision.Allow, 'ALLOWED');
   });
 
   it('denies a target with an equal or higher Knight rank', () => {
     expectDecision(
-      context({ target: { ...context().target, knightRank: 20 } }),
+      context({ target: { ...context().target!, knightRank: 20 } }),
       PolicyDecision.Deny,
       'TARGET_OUTRANKS_ACTOR',
     );
@@ -63,7 +100,7 @@ describe('evaluatePolicy', () => {
     expectDecision(
       context({
         actor: { ...context().actor, isGuildOwner: true, profile: null },
-        target: { ...context().target, knightRank: 999 },
+        target: { ...context().target!, knightRank: 999 },
       }),
       PolicyDecision.Allow,
       'ALLOWED',
@@ -75,6 +112,22 @@ describe('evaluatePolicy', () => {
       context({ actor: { ...context().actor, profile: { ...moderator, permissions: [] } } }),
       PolicyDecision.Deny,
       'PERMISSION_MISSING',
+    );
+  });
+
+  it('denies resource-scoped purge while the emergency member lock is active', () => {
+    expectDecision(
+      context({
+        action: 'message.purge',
+        actor: {
+          ...context().actor,
+          profile: { ...moderator, permissions: ['message.purge'] },
+        },
+        target: null,
+        emergency: { memberModerationLocked: true },
+      }),
+      PolicyDecision.Deny,
+      'LOCKDOWN_ACTIVE',
     );
   });
 
@@ -102,7 +155,7 @@ describe('evaluatePolicy', () => {
   });
   it('hard-denies actions targeting the guild owner', () => {
     expectDecision(
-      context({ target: { ...context().target, isGuildOwner: true } }),
+      context({ target: { ...context().target!, isGuildOwner: true } }),
       PolicyDecision.Deny,
       'OWNER_TARGET_PROTECTED',
     );
@@ -112,7 +165,7 @@ describe('evaluatePolicy', () => {
     expectDecision(
       context({
         target: {
-          ...context().target,
+          ...context().target!,
           knightRank: null,
           elevatedUnregistered: true,
         },
@@ -124,7 +177,7 @@ describe('evaluatePolicy', () => {
 
   it('requires approval for a critical protected target', () => {
     expectDecision(
-      context({ target: { ...context().target, protectionLevel: ProtectionLevel.Critical } }),
+      context({ target: { ...context().target!, protectionLevel: ProtectionLevel.Critical } }),
       PolicyDecision.RequireApproval,
       'APPROVAL_REQUIRED',
     );
