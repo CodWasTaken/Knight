@@ -5,8 +5,13 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { auth } from '../../../../auth';
 import { requireGuildAccess } from '../../../../lib/authorization';
-import { getWebRuntime } from '../../../../lib/server-runtime';
-import { updateStaffProfilePolicy } from '../../../../lib/staff-profile-service';
+import { getWebDiscordAdapter } from '../../../../lib/discord-runtime';
+import { getWebRuntime, type WebRuntime } from '../../../../lib/server-runtime';
+import {
+  createStaffProfileFromDashboard,
+  updateStaffProfileFromDashboard,
+  updateStaffProfilePolicy,
+} from '../../../../lib/staff-profile-service';
 
 function requiredString(formData: FormData, name: string): string {
   const value = formData.get(name);
@@ -24,14 +29,71 @@ function parseBanWindows(formData: FormData) {
     return [{ max: Number(max), windowMs: Number(windowMs) }];
   });
 }
-export async function updateStaffProfilePolicyAction(formData: FormData): Promise<void> {
+
+async function authorizedStaffRuntime(formData: FormData): Promise<{
+  guildId: string;
+  actorUserId: string;
+  runtime: WebRuntime;
+}> {
   const session = await auth();
   if (!session?.user?.id) redirect('/');
 
   const guildId = requiredString(formData, 'guildId');
-  const profileId = requiredString(formData, 'profileId');
   const runtime = getWebRuntime();
   await requireGuildAccess(guildId, session, runtime.repositories);
+  return { guildId, actorUserId: session.user.id, runtime };
+}
+
+function dashboardDependencies(runtime: WebRuntime) {
+  const discord = getWebDiscordAdapter(runtime);
+  if (discord === null) {
+    throw new Error(
+      'Live Discord Staff Profile operations are unavailable because DISCORD_TOKEN is not configured for the web service.',
+    );
+  }
+  return { ...runtime.repositories, discord };
+}
+
+function revalidateStaff(guildId: string, profileId?: string): void {
+  revalidatePath(`/guilds/${guildId}/staff`);
+  if (profileId !== undefined) revalidatePath(`/guilds/${guildId}/staff/${profileId}`);
+}
+
+export async function createStaffProfileAction(formData: FormData): Promise<void> {
+  const { guildId, actorUserId, runtime } = await authorizedStaffRuntime(formData);
+  await createStaffProfileFromDashboard(
+    {
+      guildId,
+      name: requiredString(formData, 'name'),
+      discordRoleId: requiredString(formData, 'discordRoleId'),
+      rank: Number(requiredString(formData, 'rank')),
+    },
+    { userId: actorUserId },
+    dashboardDependencies(runtime),
+  );
+  revalidateStaff(guildId);
+}
+
+export async function updateStaffProfileMetadataAction(formData: FormData): Promise<void> {
+  const { guildId, actorUserId, runtime } = await authorizedStaffRuntime(formData);
+  const profileId = requiredString(formData, 'profileId');
+  await updateStaffProfileFromDashboard(
+    {
+      guildId,
+      profileId,
+      name: requiredString(formData, 'name'),
+      discordRoleId: requiredString(formData, 'discordRoleId'),
+      rank: Number(requiredString(formData, 'rank')),
+    },
+    { userId: actorUserId },
+    dashboardDependencies(runtime),
+  );
+  revalidateStaff(guildId, profileId);
+}
+
+export async function updateStaffProfilePolicyAction(formData: FormData): Promise<void> {
+  const { guildId, actorUserId, runtime } = await authorizedStaffRuntime(formData);
+  const profileId = requiredString(formData, 'profileId');
 
   const current = await runtime.repositories.staff.getCurrentProfileVersion(guildId, profileId);
   if (current === null) {
@@ -48,10 +110,9 @@ export async function updateStaffProfilePolicyAction(formData: FormData): Promis
       permissions,
       banWindows: parseBanWindows(formData),
     },
-    { userId: session.user.id },
+    { userId: actorUserId },
     runtime.repositories,
   );
 
-  revalidatePath(`/guilds/${guildId}/staff`);
-  revalidatePath(`/guilds/${guildId}/staff/${profileId}`);
+  revalidateStaff(guildId, profileId);
 }
