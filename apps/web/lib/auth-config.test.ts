@@ -1,5 +1,5 @@
 import { closeDatabase, createDatabase } from '@knight/database';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 import { configureAuthEnvironment, createAuthConfig } from './auth-config';
 
 const database = createDatabase(
@@ -43,18 +43,25 @@ describe('createAuthConfig', () => {
     expect(provider.options?.authorization?.params?.scope).toBe('identify guilds');
   });
 
-  it('copies the database user id into the server session', async () => {
+  it('copies the linked Discord account id into the server session', async () => {
+    const accountLookup = vi.spyOn(database.pool, 'query').mockResolvedValueOnce({
+      rows: [{ provider_account_id: 'discord-user-1' }],
+    } as never);
     const config = createAuthConfig(database, env);
     const sessionCallback = config.callbacks?.session;
     expect(sessionCallback).toBeDefined();
 
     const result = await (sessionCallback as NonNullable<typeof sessionCallback>)({
       session: { user: { name: 'Owner' }, expires: new Date(Date.now() + 60_000).toISOString() },
-      user: { id: 'discord-user-1', name: 'Owner', email: null, emailVerified: null, image: null },
+      user: { id: 'auth-user-1', name: 'Owner', email: null, emailVerified: null, image: null },
       newSession: undefined,
       trigger: 'update',
     } as never);
 
+    expect(accountLookup).toHaveBeenCalledWith(
+      'SELECT provider_account_id FROM accounts WHERE user_id = $1 AND provider = $2 LIMIT 1',
+      ['auth-user-1', 'discord'],
+    );
     expect(result.user).toMatchObject({ id: 'discord-user-1' });
   });
 });

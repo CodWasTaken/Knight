@@ -35,12 +35,21 @@ export function createAuthConfig(database: Database, env: WebAuthEnv): NextAuthC
       }),
     ],
     callbacks: {
-      session({ session, user }) {
+      async session({ session, user }) {
+        const result = await database.pool.query<{ provider_account_id: string }>(
+          'SELECT provider_account_id FROM accounts WHERE user_id = $1 AND provider = $2 LIMIT 1',
+          [user.id, 'discord'],
+        );
+        const discordUserId = result.rows[0]?.provider_account_id;
+        if (!discordUserId) {
+          throw new Error('Authenticated user is missing a linked Discord account.');
+        }
+
         return {
           ...session,
           user: {
             ...session.user,
-            id: user.id,
+            id: discordUserId,
           },
         };
       },
