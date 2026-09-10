@@ -20,9 +20,9 @@ export type StaffProfileVersionRecord = Readonly<{
   version: number;
   permissions: readonly ActionId[];
   actionPolicies: ActionPolicies;
-  profileName?: string;
-  discordRoleId?: string;
-  rank?: number;
+  profileName: string;
+  discordRoleId: string;
+  rank: number;
 }>;
 
 export type AssignmentSyncStatus = 'PENDING' | 'SYNCED' | 'NEEDS_REPAIR';
@@ -80,6 +80,9 @@ export class StaffRepository {
           guildId: input.guildId,
           profileId: profile.id,
           version: 1,
+          profileName: input.name,
+          discordRoleId: input.discordRoleId,
+          rank: input.rank,
           permissions: [...input.permissions],
           actionPolicies: input.actionPolicies,
           createdBy: input.createdBy,
@@ -105,7 +108,12 @@ export class StaffRepository {
   }): Promise<StaffProfileVersionRecord> {
     return this.database.db.transaction(async (tx) => {
       const [profile] = await tx
-        .select({ id: staffProfiles.id })
+        .select({
+          id: staffProfiles.id,
+          name: staffProfiles.name,
+          discordRoleId: staffProfiles.discordRoleId,
+          rank: staffProfiles.rank,
+        })
         .from(staffProfiles)
         .where(and(eq(staffProfiles.guildId, input.guildId), eq(staffProfiles.id, input.profileId)))
         .for('update')
@@ -132,6 +140,9 @@ export class StaffRepository {
           guildId: input.guildId,
           profileId: input.profileId,
           version: nextVersion,
+          profileName: profile.name,
+          discordRoleId: profile.discordRoleId,
+          rank: profile.rank,
           permissions: [...input.permissions],
           actionPolicies: input.actionPolicies,
           createdBy: input.createdBy ?? null,
@@ -151,6 +162,70 @@ export class StaffRepository {
     });
   }
 
+  public async updateProfileWithVersion(input: {
+    guildId: string;
+    profileId: string;
+    name: string;
+    discordRoleId: string;
+    rank: number;
+    permissions: readonly ActionId[];
+    actionPolicies: ActionPolicies;
+    createdBy: string;
+  }): Promise<{ profile: StaffProfileRecord; version: StaffProfileVersionRecord }> {
+    return this.database.db.transaction(async (tx) => {
+      const [profile] = await tx
+        .select()
+        .from(staffProfiles)
+        .where(and(eq(staffProfiles.guildId, input.guildId), eq(staffProfiles.id, input.profileId)))
+        .for('update')
+        .limit(1);
+      if (!profile) throw new Error('Staff profile not found in guild');
+
+      const [latest] = await tx
+        .select({ version: staffProfileVersions.version })
+        .from(staffProfileVersions)
+        .where(
+          and(
+            eq(staffProfileVersions.guildId, input.guildId),
+            eq(staffProfileVersions.profileId, input.profileId),
+          ),
+        )
+        .orderBy(desc(staffProfileVersions.version))
+        .limit(1);
+
+      const [version] = await tx
+        .insert(staffProfileVersions)
+        .values({
+          guildId: input.guildId,
+          profileId: input.profileId,
+          version: (latest?.version ?? 0) + 1,
+          profileName: input.name,
+          discordRoleId: input.discordRoleId,
+          rank: input.rank,
+          permissions: [...input.permissions],
+          actionPolicies: input.actionPolicies,
+          createdBy: input.createdBy,
+        })
+        .returning();
+      if (!version) throw new Error('Failed to create staff profile version');
+
+      const [updated] = await tx
+        .update(staffProfiles)
+        .set({
+          name: input.name,
+          discordRoleId: input.discordRoleId,
+          rank: input.rank,
+          currentVersionId: version.id,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(staffProfiles.guildId, input.guildId), eq(staffProfiles.id, input.profileId)))
+        .returning();
+      if (!updated) throw new Error('Failed to update staff profile');
+
+      return { profile: updated, version };
+    });
+  }
+
   public async getCurrentProfileVersion(
     guildId: string,
     profileId: string,
@@ -163,9 +238,9 @@ export class StaffRepository {
         version: staffProfileVersions.version,
         permissions: staffProfileVersions.permissions,
         actionPolicies: staffProfileVersions.actionPolicies,
-        profileName: staffProfiles.name,
-        discordRoleId: staffProfiles.discordRoleId,
-        rank: staffProfiles.rank,
+        profileName: staffProfileVersions.profileName,
+        discordRoleId: staffProfileVersions.discordRoleId,
+        rank: staffProfileVersions.rank,
       })
       .from(staffProfiles)
       .innerJoin(

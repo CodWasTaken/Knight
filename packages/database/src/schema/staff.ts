@@ -49,6 +49,9 @@ export const staffProfileVersions = pgTable(
       .notNull()
       .references(() => staffProfiles.id, { onDelete: 'cascade' }),
     version: integer('version').notNull(),
+    profileName: text('profile_name').notNull(),
+    discordRoleId: text('discord_role_id').notNull(),
+    rank: integer('rank').notNull(),
     permissions: jsonb('permissions').$type<ActionId[]>().notNull().default([]),
     actionPolicies: jsonb('action_policies').$type<ActionPolicies>().notNull().default({}),
     createdBy: text('created_by'),
@@ -58,6 +61,7 @@ export const staffProfileVersions = pgTable(
     uniqueIndex('staff_profile_versions_profile_version_uq').on(table.profileId, table.version),
     index('staff_profile_versions_guild_profile_idx').on(table.guildId, table.profileId),
     check('staff_profile_versions_version_check', sql`${table.version} > 0`),
+    check('staff_profile_versions_rank_check', sql`${table.rank} >= 0`),
   ],
 );
 

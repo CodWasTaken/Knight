@@ -286,4 +286,46 @@ describe('security persistence', () => {
     );
     expect(await staff.getActiveAssignment('100', 'sync-user')).toBeNull();
   });
+
+  it('preserves immutable profile name, role, and rank across metadata edits', async () => {
+    const created = await staff.createProfileWithInitialVersion({
+      guildId: '100',
+      name: 'Metadata v1',
+      discordRoleId: 'role-metadata-v1',
+      rank: 10,
+      permissions: ['member.ban'],
+      actionPolicies: {},
+      createdBy: '1',
+    });
+    const updated = await staff.updateProfileWithVersion({
+      guildId: '100',
+      profileId: created.profile.id,
+      name: 'Metadata v2',
+      discordRoleId: 'role-metadata-v2',
+      rank: 20,
+      permissions: ['member.kick'],
+      actionPolicies: {},
+      createdBy: '1',
+    });
+
+    expect(created.version).toMatchObject({
+      version: 1,
+      profileName: 'Metadata v1',
+      discordRoleId: 'role-metadata-v1',
+      rank: 10,
+    });
+    expect(updated.version).toMatchObject({
+      version: 2,
+      profileName: 'Metadata v2',
+      discordRoleId: 'role-metadata-v2',
+      rank: 20,
+    });
+    expect(await staff.getCurrentProfileVersion('100', created.profile.id)).toMatchObject({
+      profileName: 'Metadata v2',
+      discordRoleId: 'role-metadata-v2',
+      rank: 20,
+      permissions: ['member.kick'],
+    });
+    expect(created.version.permissions).toEqual(['member.ban']);
+  });
 });

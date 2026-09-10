@@ -5,3 +5,4 @@ export * from './repositories/guild-repository.js';
 export * from './repositories/staff-repository.js';
 export * from './repositories/security-manager-repository.js';
 export * from './repositories/policy-decision-repository.js';
+export * from './repositories/warning-repository.js';
