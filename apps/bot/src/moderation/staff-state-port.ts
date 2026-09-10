@@ -43,7 +43,7 @@ function toProfileSnapshot(
   };
 }
 
-function hasElevatedDiscordAuthority(permissions: bigint): boolean {
+export function hasElevatedDiscordAuthority(permissions: bigint): boolean {
   return (permissions & ELEVATED_DISCORD_PERMISSION_MASK) !== 0n;
 }
 
