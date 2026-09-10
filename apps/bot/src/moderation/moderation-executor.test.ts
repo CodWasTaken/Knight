@@ -102,6 +102,9 @@ describe('executeModerationAction', () => {
     expect(result).toMatchObject({ kind: 'EXECUTED', executed: true });
     expect(deps.correlations.create).not.toHaveBeenCalled();
     expect(mutation).toHaveBeenCalledTimes(1);
+    expect(mutation).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'ALLOWED', policyVersionId: 'version-20' }),
+    );
   });
   it('fails closed when security state cannot be loaded', async () => {
     const deps = makeDependencies();

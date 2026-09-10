@@ -43,7 +43,7 @@ export type ModerationExecutionResult =
 export async function executeModerationAction(
   input: ModerationExecutionInput,
   dependencies: ModerationExecutorDependencies,
-  mutation: () => Promise<void>,
+  mutation: (decision: SecurityDecision) => Promise<void>,
 ): Promise<ModerationExecutionResult> {
   const request: GuardedActionRequest = {
     guildId: input.guildId,
@@ -93,7 +93,7 @@ export async function executeModerationAction(
   }
 
   try {
-    await mutation();
+    await mutation(decision);
   } catch {
     return { kind: 'MUTATION_FAILED', executed: false, decision };
   }
