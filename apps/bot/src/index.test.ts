@@ -12,6 +12,12 @@ import {
 function fakeDiscord() {
   return {
     banMember: vi.fn(),
+    kickMember: vi.fn(),
+    timeoutMember: vi.fn(),
+    unbanMember: vi.fn(),
+    sendDirectMessage: vi.fn(),
+    fetchRecentMessages: vi.fn(),
+    deleteMessages: vi.fn(),
     addRole: vi.fn(),
     removeRole: vi.fn(),
     getMemberState: vi.fn(),

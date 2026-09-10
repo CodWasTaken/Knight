@@ -12,12 +12,20 @@ type DiscordRoute = `/${string}`;
 export interface DiscordRestClient {
   get(route: DiscordRoute): Promise<unknown>;
   patch(route: DiscordRoute, options: { body: unknown; reason?: string }): Promise<unknown>;
+  put?(route: DiscordRoute, options?: { reason?: string }): Promise<unknown>;
+  delete?(route: DiscordRoute, options?: { reason?: string }): Promise<unknown>;
 }
 
 type GuildPayload = Readonly<{ id: string; owner_id: string }>;
 type UserPayload = Readonly<{ id: string }>;
 type MemberPayload = Readonly<{ roles: readonly string[] }>;
-type RolePayload = Readonly<{ id: string; position: number; permissions: string }>;
+type RolePayload = Readonly<{
+  id: string;
+  name: string;
+  managed: boolean;
+  position: number;
+  permissions: string;
+}>;
 
 function asGuild(value: unknown): GuildPayload {
   return value as GuildPayload;
@@ -67,10 +75,36 @@ export class DiscordRestSetupAdapter {
       knightPermissions,
       roles: roles.map((role) => ({
         roleId: role.id,
+        name: role.name,
+        managed: role.managed,
         position: role.position,
         permissions: BigInt(role.permissions),
       })),
     };
+  }
+
+  public async addRole(input: {
+    guildId: string;
+    userId: string;
+    roleId: string;
+    reason: string;
+  }): Promise<void> {
+    if (this.rest.put === undefined) throw new Error('Discord REST client does not support PUT');
+    await this.rest.put(Routes.guildMemberRole(input.guildId, input.userId, input.roleId), {
+      reason: input.reason,
+    });
+  }
+
+  public async removeRole(input: {
+    guildId: string;
+    userId: string;
+    roleId: string;
+    reason: string;
+  }): Promise<void> {
+    if (this.rest.delete === undefined) throw new Error('Discord REST client does not support DELETE');
+    await this.rest.delete(Routes.guildMemberRole(input.guildId, input.userId, input.roleId), {
+      reason: input.reason,
+    });
   }
 
   public async setRolePermissions(input: {
@@ -90,5 +124,7 @@ export function createDiscordRestSetupAdapter(token: string): DiscordRestSetupAd
   return new DiscordRestSetupAdapter({
     get: (route) => rest.get(route),
     patch: (route, options) => rest.patch(route, options),
+    put: (route, options) => rest.put(route, options),
+    delete: (route, options) => rest.delete(route, options),
   });
 }

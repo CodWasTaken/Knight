@@ -15,14 +15,18 @@ describe('DiscordRestSetupAdapter', () => {
       if (route === Routes.guildMember('100', 'knight')) return { roles: ['role-knight'] };
       if (route === Routes.guildRoles('100')) {
         return [
-          { id: '100', position: 0, permissions: '0' },
+          { id: '100', name: '@everyone', managed: false, position: 0, permissions: '0' },
           {
             id: 'role-knight',
+            name: 'Knight',
+            managed: true,
             position: 50,
             permissions: PermissionFlagsBits.Administrator.toString(),
           },
           {
             id: 'role-staff',
+            name: 'Moderator',
+            managed: false,
             position: 20,
             permissions: PermissionFlagsBits.BanMembers.toString(),
           },
@@ -38,6 +42,8 @@ describe('DiscordRestSetupAdapter', () => {
     expect(state.knightPermissions).toBe(ALL_KNOWN_PERMISSIONS);
     expect(state.roles).toContainEqual({
       roleId: 'role-staff',
+      name: 'Moderator',
+      managed: false,
       position: 20,
       permissions: PermissionFlagsBits.BanMembers,
     });
@@ -57,6 +63,27 @@ describe('DiscordRestSetupAdapter', () => {
     expect(patch).toHaveBeenCalledWith(Routes.guildRole('100', 'role-staff'), {
       body: { permissions: '900719925474099312345' },
       reason: 'Knight Guarded migration',
+    });
+  });
+
+  it('adds and removes mapped Discord roles through exact REST routes', async () => {
+    const put = vi.fn().mockResolvedValue({});
+    const del = vi.fn().mockResolvedValue({});
+    const adapter = new DiscordRestSetupAdapter({
+      get: vi.fn(),
+      patch: vi.fn(),
+      put,
+      delete: del,
+    });
+
+    await adapter.addRole({ guildId: '100', userId: '42', roleId: 'staff', reason: 'sync' });
+    await adapter.removeRole({ guildId: '100', userId: '42', roleId: 'staff', reason: 'sync' });
+
+    expect(put).toHaveBeenCalledWith(Routes.guildMemberRole('100', '42', 'staff'), {
+      reason: 'sync',
+    });
+    expect(del).toHaveBeenCalledWith(Routes.guildMemberRole('100', '42', 'staff'), {
+      reason: 'sync',
     });
   });
 });
