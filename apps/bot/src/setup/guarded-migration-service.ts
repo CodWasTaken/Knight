@@ -1,7 +1,11 @@
 import { GuildMode } from '@knight/contracts';
 import { PermissionFlagsBits } from 'discord-api-types/v10';
 
-const BAN_MEMBERS = PermissionFlagsBits.BanMembers;
+const GUARDED_NATIVE_PERMISSION_MASK =
+  PermissionFlagsBits.BanMembers |
+  PermissionFlagsBits.KickMembers |
+  PermissionFlagsBits.ModerateMembers |
+  PermissionFlagsBits.ManageMessages;
 const MANAGE_ROLES = PermissionFlagsBits.ManageRoles;
 
 export type GuardedRolePreview = Readonly<{
@@ -137,8 +141,8 @@ export class GuardedMigrationService {
     const affectedProfiles = [] as Array<{ id: string; roleId: string; staffCount: number }>;
     for (const profile of profiles) {
       if (!profile.enabled) continue;
-      const version = await this.dependencies.staff.getCurrentProfileVersion(guildId, profile.id);
-      if (version === null || !version.permissions.includes('member.ban')) continue;
+      const role = discordGuild.roles.find((candidate) => candidate.roleId === profile.discordRoleId);
+      if (role === undefined || (role.permissions & GUARDED_NATIVE_PERMISSION_MASK) === 0n) continue;
       const assignments = await this.dependencies.staff.listActiveAssignmentsForProfile(
         guildId,
         profile.id,
@@ -175,7 +179,7 @@ export class GuardedMigrationService {
         manageable: blockReason === null,
         blockReason,
         beforePermissions,
-        afterPermissions: beforePermissions & ~BAN_MEMBERS,
+        afterPermissions: beforePermissions & ~GUARDED_NATIVE_PERMISSION_MASK,
       });
     }
 
@@ -199,7 +203,7 @@ export class GuardedMigrationService {
     if (preview.roles.length === 0) {
       throw new GuardedMigrationError(
         'NO_AFFECTED_ROLES',
-        'No enabled Staff Profile currently requires Ban Members migration.',
+        'No enabled Staff Profile currently has guarded native moderation permissions to replace.',
       );
     }
     if (preview.blocked) {
@@ -225,7 +229,7 @@ export class GuardedMigrationService {
           guildId: input.guildId,
           roleId: role.roleId,
           permissions: role.afterPermissions,
-          reason: `Knight MEMBER_BAN Guarded migration ${migrationId}`,
+          reason: `Knight MODERATION Guarded migration ${migrationId}`,
         });
       }
     } catch {
@@ -236,7 +240,7 @@ export class GuardedMigrationService {
             guildId: input.guildId,
             roleId: role.roleId,
             permissions: role.beforePermissions,
-            reason: `Knight MEMBER_BAN Guarded migration compensation ${migrationId}`,
+            reason: `Knight MODERATION Guarded migration compensation ${migrationId}`,
           });
         } catch {
           compensationFailed = true;
@@ -282,7 +286,7 @@ export class GuardedMigrationService {
         guildId: input.guildId,
         roleId: snapshot.roleId,
         permissions: BigInt(snapshot.permissions),
-        reason: `Knight MEMBER_BAN Guarded rollback ${snapshot.migrationId}`,
+        reason: `Knight MODERATION Guarded rollback ${snapshot.migrationId}`,
       });
     }
 

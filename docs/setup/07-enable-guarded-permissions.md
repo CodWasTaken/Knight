@@ -2,7 +2,7 @@
 
 ## What and why
 
-Guarded mode makes Knight the enforced path for the protected action category. The foundation supports **MEMBER_BAN only**: Knight snapshots each affected mapped role's exact permission bigint, then removes only Discord's Ban Members bit. Every unrelated permission bit is preserved.
+Guarded mode makes Knight the enforced path for the implemented moderation replacements. Knight snapshots each affected mapped role's exact permission bigint, then removes Discord's Ban Members, Kick Members, Moderate Members, and Manage Messages bits. Every unrelated permission bit is preserved.
 
 ## How
 
@@ -10,17 +10,17 @@ Guarded mode makes Knight the enforced path for the protected action category. T
 2. Open the guild setup dashboard while Knight is in Test mode.
 3. Review the Guarded preview. It shows affected profile IDs, mapped role IDs, active staff count, exact before/after permission bigints, and manageability blockers.
 4. Resolve any missing Manage Roles capability, missing role, or role-hierarchy blocker.
-5. The Discord guild owner checks the explicit confirmation box and enables Guarded bans.
-6. Verify staff use `/member ban` and that policy/rate-limit denials still work.
+5. The Discord guild owner checks the explicit confirmation box and enables Guarded moderation.
+6. Verify staff use Knight `/member` moderation commands and `/message purge`, and that policy/rate-limit denials still work.
 7. If you need to back out, the guild owner uses the rollback control to restore the latest saved exact permission bigints and return to Test.
 
 ## Example
 
-If a mapped role has Ban Members, Kick Members, Moderate Members, and Manage Messages, the preview's after value removes only Ban Members. Kick Members, Moderate Members, Manage Messages, and every other unrelated bit remain unchanged.
+If a mapped role has Ban Members, Kick Members, Moderate Members, Manage Messages, and View Audit Log, the preview removes the first four guarded moderation bits while preserving View Audit Log and every other unrelated permission.
 
 ## Security implications
 
-Only the guild owner can activate or roll back Guarded `MEMBER_BAN`. All snapshots are persisted before the first Discord permission mutation. If a multi-role migration write fails, Knight attempts compensation from those snapshots before activating Guarded state. PostgreSQL mode/category state changes atomically.
+Only the guild owner can activate or roll back Guarded moderation permissions. All snapshots are persisted before the first Discord permission mutation. If a multi-role migration write fails, Knight attempts compensation from those snapshots before activating Guarded state. PostgreSQL mode/category state changes atomically.
 
 ## Common mistakes
 

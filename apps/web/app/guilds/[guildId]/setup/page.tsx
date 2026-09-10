@@ -193,10 +193,10 @@ export default async function SetupPage({
               <input name="guildId" type="hidden" value={guildId} />
               <label className="toggleRow">
                 <input name="confirmGuarded" type="checkbox" value="yes" required />
-                <span>I understand Knight will snapshot roles and remove only Ban Members.</span>
+                <span>I understand Knight will snapshot roles and remove Ban, Kick, Moderate, and Manage Messages permissions.</span>
               </label>
               <button disabled={preview.blocked || preview.roles.length === 0} type="submit">
-                Enable Guarded bans
+                Enable Guarded moderation
               </button>
             </form>
           ) : (
@@ -217,7 +217,7 @@ export default async function SetupPage({
             <form action={rollbackGuardedBanAction} className="setupAction">
               <input name="guildId" type="hidden" value={guildId} />
               <button className="secondary" type="submit">
-                Rollback Guarded bans to Test
+                Rollback Guarded moderation to Test
               </button>
             </form>
           ) : (

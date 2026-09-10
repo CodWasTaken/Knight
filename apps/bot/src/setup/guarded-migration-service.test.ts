@@ -64,7 +64,7 @@ describe('GuardedMigrationService', () => {
     });
     expect(deps.discord.getGuildState).not.toHaveBeenCalled();
   });
-  it('previews exact BanMembers removal while preserving unrelated permissions', async () => {
+  it('previews exact guarded native permission removal while preserving unrelated permissions', async () => {
     const deps = makeDependencies();
     const service = new GuardedMigrationService(deps);
 
@@ -78,7 +78,7 @@ describe('GuardedMigrationService', () => {
         roleId: 'role-1',
         manageable: true,
         beforePermissions,
-        afterPermissions: beforePermissions & ~ban,
+        afterPermissions: 0n,
       }),
     ]);
   });
@@ -308,5 +308,94 @@ describe('GuardedMigrationService', () => {
       }),
     ).rejects.toBeInstanceOf(GuardedMigrationError);
     expect(deps.discord.setRolePermissions).not.toHaveBeenCalled();
+  });
+});
+
+describe('expanded Guarded native permission replacement', () => {
+  it.each([
+    ['BanMembers', PermissionFlagsBits.BanMembers],
+    ['KickMembers', PermissionFlagsBits.KickMembers],
+    ['ModerateMembers', PermissionFlagsBits.ModerateMembers],
+    ['ManageMessages', PermissionFlagsBits.ManageMessages],
+  ])('removes %s from a mapped staff role', async (_name, guardedBit) => {
+    const deps = makeDependencies();
+    const unrelated = PermissionFlagsBits.ViewAuditLog;
+    deps.discord.getGuildState = vi.fn().mockResolvedValue({
+      guildId: '100',
+      ownerId: 'owner',
+      knightUserId: 'knight',
+      knightRolePosition: 50,
+      knightPermissions: manageRoles,
+      roles: [{ roleId: 'role-1', position: 20, permissions: guardedBit | unrelated }],
+    });
+
+    const preview = await new GuardedMigrationService(deps).previewBanGuard('100');
+
+    expect(preview.roles).toEqual([
+      expect.objectContaining({
+        roleId: 'role-1',
+        beforePermissions: guardedBit | unrelated,
+        afterPermissions: unrelated,
+      }),
+    ]);
+  });
+
+  it('unions all guarded native bits into one role mutation and one snapshot', async () => {
+    const deps = makeDependencies();
+    const guardedMask =
+      PermissionFlagsBits.BanMembers |
+      PermissionFlagsBits.KickMembers |
+      PermissionFlagsBits.ModerateMembers |
+      PermissionFlagsBits.ManageMessages;
+    const unrelated = PermissionFlagsBits.ViewAuditLog;
+    deps.discord.getGuildState = vi.fn().mockResolvedValue({
+      guildId: '100',
+      ownerId: 'owner',
+      knightUserId: 'knight',
+      knightRolePosition: 50,
+      knightPermissions: manageRoles,
+      roles: [{ roleId: 'role-1', position: 20, permissions: guardedMask | unrelated }],
+    });
+
+    await new GuardedMigrationService(deps).enableBanGuard({
+      guildId: '100',
+      actorUserId: 'owner',
+    });
+
+    expect(deps.guilds.saveRolePermissionSnapshot).toHaveBeenCalledTimes(1);
+    expect(deps.discord.setRolePermissions).toHaveBeenCalledTimes(1);
+    expect(deps.discord.setRolePermissions).toHaveBeenCalledWith(
+      expect.objectContaining({ roleId: 'role-1', permissions: unrelated }),
+    );
+  });
+
+  it('strips guarded native permissions even when the mapped profile grants no replacement action', async () => {
+    const deps = makeDependencies();
+    deps.staff.getCurrentProfileVersion = vi.fn().mockResolvedValue({
+      id: 'version-1',
+      guildId: '100',
+      profileId: 'profile-1',
+      version: 1,
+      permissions: [],
+      actionPolicies: {},
+    });
+    deps.discord.getGuildState = vi.fn().mockResolvedValue({
+      guildId: '100',
+      ownerId: 'owner',
+      knightUserId: 'knight',
+      knightRolePosition: 50,
+      knightPermissions: manageRoles,
+      roles: [{ roleId: 'role-1', position: 20, permissions: PermissionFlagsBits.KickMembers }],
+    });
+
+    const preview = await new GuardedMigrationService(deps).previewBanGuard('100');
+
+    expect(preview.roles).toEqual([
+      expect.objectContaining({
+        roleId: 'role-1',
+        beforePermissions: PermissionFlagsBits.KickMembers,
+        afterPermissions: 0n,
+      }),
+    ]);
   });
 });
