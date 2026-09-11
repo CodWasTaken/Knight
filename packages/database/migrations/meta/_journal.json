@@ -15,6 +15,13 @@
       "when": 1789073978099,
       "tag": "0001_tired_living_tribunal",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789155541822,
+      "tag": "0002_military_robbie_robertson",
+      "breakpoints": true
     }
   ]
 }
