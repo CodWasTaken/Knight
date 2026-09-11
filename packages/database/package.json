@@ -1,0 +1,28 @@
+{
+  "name": "@knight/database",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client.ts",
+    "./schema/auth": "./src/schema/auth.ts",
+    "./repositories/guild-repository": "./src/repositories/guild-repository.ts",
+    "./repositories/security-manager-repository": "./src/repositories/security-manager-repository.ts",
+    "./repositories/staff-repository": "./src/repositories/staff-repository.ts"
+  },
+  "scripts": {
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run --passWithNoTests --no-file-parallelism"
+  },
+  "dependencies": {
+    "@knight/contracts": "workspace:*",
+    "drizzle-orm": "0.44.7",
+    "pg": "8.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3",
+    "@types/pg": "^8.15.0",
+    "drizzle-kit": "0.31.10"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "@knight/worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run --passWithNoTests",
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/index.ts",
+    "start": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@knight/config": "workspace:*",
+    "@knight/database": "workspace:*",
+    "@knight/redis": "workspace:*",
+    "tsx": "4.23.13"
+  }
+}

@@ -1,0 +1,50 @@
+name: CI
+on:
+  push:
+    branches: ['feature/security-foundation']
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: knight_test
+          POSTGRES_USER: knight
+          POSTGRES_PASSWORD: knight
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U knight -d knight_test"
+          --health-interval=5s --health-timeout=5s --health-retries=10
+      redis:
+        image: redis:8-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s --health-timeout=5s --health-retries=10
+    env:
+      DATABASE_URL: postgres://knight:knight@localhost:5432/knight_test
+      REDIS_URL: redis://localhost:6379
+      NODE_ENV: test
+      DISCORD_TOKEN: test-token
+      DISCORD_CLIENT_ID: '123'
+      DISCORD_CLIENT_SECRET: test-secret
+      AUTH_SECRET: 0123456789abcdef0123456789abcdef
+      APP_URL: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.17.0
+      - run: corepack enable
+      - run: corepack prepare pnpm@12.4.0 --activate
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @knight/database exec drizzle-kit migrate
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+      - run: docker build --tag knight-ci .
+      - run: docker run --rm --entrypoint sh knight-ci -lc 'test "$(id -u)" -ne 0 && test -r /app/pnpm-workspace.yaml && test -r /app/pnpm-lock.yaml && pnpm --filter @knight/database exec drizzle-kit --version >/dev/null && cd /app/apps/worker && pnpm exec tsx -e "Promise.all([import(\"@knight/config\"), import(\"@knight/database/client\"), import(\"@knight/redis\")]).then(() => undefined)" && cd /app/apps/bot && pnpm exec tsx -e "Promise.all([import(\"@knight/config\"), import(\"@knight/contracts\"), import(\"@knight/database\"), import(\"@knight/discord\"), import(\"@knight/redis\"), import(\"@knight/security\")]).then(() => undefined)"'
