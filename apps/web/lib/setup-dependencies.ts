@@ -1,4 +1,5 @@
 import { GuardedMigrationService, SetupService } from '@knight/bot/setup';
+import { SecurityRecorder } from '@knight/bot/security';
 import type { DiscordActionPort } from '@knight/discord';
 import type { WebRepositories } from './server-dependencies';
 
@@ -9,9 +10,13 @@ export type WebSetupServices = Readonly<{
 
 export function createWebSetupServices(input: {
   repositories: WebRepositories;
-  discord: Pick<DiscordActionPort, 'getGuildState' | 'setRolePermissions'>;
+  discord: Pick<DiscordActionPort, 'getGuildState' | 'setRolePermissions' | 'sendChannelMessage'>;
   createMigrationId: () => string;
 }): WebSetupServices {
+  const securityRecorder = new SecurityRecorder({
+    ledger: input.repositories.securityLedger,
+    discord: input.discord,
+  });
   return {
     setup: new SetupService({
       guilds: input.repositories.guilds,
@@ -23,6 +28,7 @@ export function createWebSetupServices(input: {
       guilds: input.repositories.guilds,
       staff: input.repositories.staff,
       discord: input.discord,
+      securityRecorder,
       createMigrationId: input.createMigrationId,
     }),
   };

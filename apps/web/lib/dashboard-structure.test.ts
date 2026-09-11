@@ -6,14 +6,18 @@ async function source(relativePath: string): Promise<string> {
 }
 
 describe('dashboard shell structure', () => {
-  it('keeps persistent Overview, Staff Profiles, and Setup navigation in the guild layout', async () => {
+  it('keeps persistent Overview, Staff Profiles, Logging, Logs, and Setup navigation in the guild layout', async () => {
     const layout = await source('../app/guilds/[guildId]/layout.tsx');
 
     expect(layout).toContain('Overview');
     expect(layout).toContain('Staff Profiles');
+    expect(layout).toContain('Logging');
+    expect(layout).toContain('Logs');
     expect(layout).toContain('Setup');
     expect(layout).toContain('href={`/guilds/${guildId}`}');
     expect(layout).toContain('href={`/guilds/${guildId}/staff`}');
+    expect(layout).toContain('href={`/guilds/${guildId}/logging`}');
+    expect(layout).toContain('href={`/guilds/${guildId}/logs`}');
     expect(layout).toContain('href={`/guilds/${guildId}/setup`}');
   });
 

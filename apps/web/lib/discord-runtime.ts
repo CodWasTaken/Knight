@@ -6,7 +6,13 @@ import { getWebRuntime, type WebRuntime } from './server-runtime';
 
 export type WebDiscordAdapter = Pick<
   DiscordActionPort,
-  'getGuildState' | 'setRolePermissions' | 'addRole' | 'removeRole'
+  | 'getGuildState'
+  | 'setRolePermissions'
+  | 'addRole'
+  | 'removeRole'
+  | 'listTextChannels'
+  | 'canSendToChannel'
+  | 'sendChannelMessage'
 >;
 
 export function getWebDiscordAdapter(

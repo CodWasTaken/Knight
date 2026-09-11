@@ -36,6 +36,8 @@ export default async function GuildLayout({
         <nav aria-label="Guild navigation" className="guildNav">
           <Link href={`/guilds/${guildId}`}>Overview</Link>
           <Link href={`/guilds/${guildId}/staff`}>Staff Profiles</Link>
+          <Link href={`/guilds/${guildId}/logging`}>Logging</Link>
+          <Link href={`/guilds/${guildId}/logs`}>Logs</Link>
           <Link href={`/guilds/${guildId}/setup`}>Setup</Link>
         </nav>
         <Link className="guildExit" href="/">

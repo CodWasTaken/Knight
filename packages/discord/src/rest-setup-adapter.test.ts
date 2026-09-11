@@ -86,4 +86,70 @@ describe('DiscordRestSetupAdapter', () => {
       reason: 'sync',
     });
   });
+
+  it('lists text notification channels and validates Knight send permissions', async () => {
+    const base = PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessages;
+    const get = vi.fn().mockImplementation(async (route: string) => {
+      if (route === Routes.guildChannels('100'))
+        return [
+          { id: 'log', guild_id: '100', name: 'security-log', type: 0, permission_overwrites: [] },
+          {
+            id: 'news',
+            guild_id: '100',
+            name: 'announcements',
+            type: 5,
+            permission_overwrites: [],
+          },
+          { id: 'voice', guild_id: '100', name: 'voice', type: 2, permission_overwrites: [] },
+        ];
+      if (route === Routes.channel('log'))
+        return { id: 'log', guild_id: '100', type: 0, permission_overwrites: [] };
+      if (route === Routes.channel('blocked'))
+        return {
+          id: 'blocked',
+          guild_id: '100',
+          type: 0,
+          permission_overwrites: [
+            { id: '100', type: 0, allow: '0', deny: PermissionFlagsBits.SendMessages.toString() },
+          ],
+        };
+      if (route === Routes.user()) return { id: 'knight' };
+      if (route === Routes.guildMember('100', 'knight')) return { roles: ['role-knight'] };
+      if (route === Routes.guildRoles('100'))
+        return [
+          { id: '100', name: '@everyone', managed: false, position: 0, permissions: '0' },
+          {
+            id: 'role-knight',
+            name: 'Knight',
+            managed: true,
+            position: 50,
+            permissions: base.toString(),
+          },
+        ];
+      throw new Error(`unexpected route ${route}`);
+    });
+    const adapter = new DiscordRestSetupAdapter({ get, patch: vi.fn() });
+
+    expect(await adapter.listTextChannels('100')).toEqual([
+      { channelId: 'log', name: 'security-log' },
+      { channelId: 'news', name: 'announcements' },
+    ]);
+    expect(await adapter.canSendToChannel('100', 'log')).toBe(true);
+    expect(await adapter.canSendToChannel('100', 'blocked')).toBe(false);
+  });
+
+  it('sends channel notifications through the REST API', async () => {
+    const post = vi.fn().mockResolvedValue(undefined);
+    const adapter = new DiscordRestSetupAdapter({
+      get: vi.fn(),
+      patch: vi.fn(),
+      post,
+    } as never);
+
+    await adapter.sendChannelMessage('security', 'Knight security event');
+
+    expect(post).toHaveBeenCalledWith(Routes.channelMessages('security'), {
+      body: { content: 'Knight security event' },
+    });
+  });
 });

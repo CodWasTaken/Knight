@@ -1,5 +1,6 @@
 import {
   GuildRepository,
+  SecurityLedgerRepository,
   SecurityManagerRepository,
   StaffRepository,
   type Database,
@@ -13,6 +14,7 @@ describe('createWebRepositories', () => {
 
     expect(repositories.guilds).toBeInstanceOf(GuildRepository);
     expect(repositories.managers).toBeInstanceOf(SecurityManagerRepository);
+    expect(repositories.securityLedger).toBeInstanceOf(SecurityLedgerRepository);
     expect(repositories.staff).toBeInstanceOf(StaffRepository);
   });
 });

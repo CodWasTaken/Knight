@@ -1,6 +1,6 @@
 import { REST } from '@discordjs/rest';
-import { PermissionFlagsBits, Routes } from 'discord-api-types/v10';
-import type { DiscordGuildState } from './port.js';
+import { ChannelType, PermissionFlagsBits, Routes } from 'discord-api-types/v10';
+import type { DiscordGuildState, DiscordTextChannelState } from './port.js';
 
 const ALL_KNOWN_PERMISSIONS = Object.values(PermissionFlagsBits).reduce(
   (combined, permission) => combined | permission,
@@ -11,6 +11,7 @@ type DiscordRoute = `/${string}`;
 
 export interface DiscordRestClient {
   get(route: DiscordRoute): Promise<unknown>;
+  post?(route: DiscordRoute, options: { body: unknown }): Promise<unknown>;
   patch(route: DiscordRoute, options: { body: unknown; reason?: string }): Promise<unknown>;
   put?(route: DiscordRoute, options?: { reason?: string }): Promise<unknown>;
   delete?(route: DiscordRoute, options?: { reason?: string }): Promise<unknown>;
@@ -38,6 +39,25 @@ function asMember(value: unknown): MemberPayload {
 }
 function asRoles(value: unknown): readonly RolePayload[] {
   return value as readonly RolePayload[];
+}
+
+type ChannelPayload = Readonly<{
+  id: string;
+  guild_id?: string;
+  name?: string;
+  type: number;
+  permission_overwrites?: readonly Readonly<{
+    id: string;
+    type: number;
+    allow: string;
+    deny: string;
+  }>[];
+}>;
+function asChannels(value: unknown): readonly ChannelPayload[] {
+  return value as readonly ChannelPayload[];
+}
+function asChannel(value: unknown): ChannelPayload {
+  return value as ChannelPayload;
 }
 export class DiscordRestSetupAdapter {
   public constructor(private readonly rest: DiscordRestClient) {}
@@ -83,6 +103,62 @@ export class DiscordRestSetupAdapter {
     };
   }
 
+  public async listTextChannels(guildId: string): Promise<readonly DiscordTextChannelState[]> {
+    return asChannels(await this.rest.get(Routes.guildChannels(guildId)))
+      .filter(
+        (channel) =>
+          channel.type === ChannelType.GuildText || channel.type === ChannelType.GuildAnnouncement,
+      )
+      .map((channel) => ({ channelId: channel.id, name: channel.name ?? channel.id }));
+  }
+
+  public async canSendToChannel(guildId: string, channelId: string): Promise<boolean> {
+    const channel = asChannel(await this.rest.get(Routes.channel(channelId)));
+    if (
+      channel.guild_id !== guildId ||
+      (channel.type !== ChannelType.GuildText && channel.type !== ChannelType.GuildAnnouncement)
+    )
+      return false;
+
+    const user = asUser(await this.rest.get(Routes.user()));
+    const [memberRaw, rolesRaw] = await Promise.all([
+      this.rest.get(Routes.guildMember(guildId, user.id)),
+      this.rest.get(Routes.guildRoles(guildId)),
+    ]);
+    const member = asMember(memberRaw);
+    const roles = asRoles(rolesRaw);
+    let permissions = roles
+      .filter((role) => role.id === guildId || member.roles.includes(role.id))
+      .reduce((combined, role) => combined | BigInt(role.permissions), 0n);
+    if ((permissions & PermissionFlagsBits.Administrator) === PermissionFlagsBits.Administrator) {
+      return true;
+    }
+
+    const overwrites = channel.permission_overwrites ?? [];
+    const apply = (allow: bigint, deny: bigint) => {
+      permissions = (permissions & ~deny) | allow;
+    };
+    const everyone = overwrites.find((entry) => entry.type === 0 && entry.id === guildId);
+    if (everyone) apply(BigInt(everyone.allow), BigInt(everyone.deny));
+    let roleAllow = 0n;
+    let roleDeny = 0n;
+    for (const entry of overwrites) {
+      if (entry.type !== 0 || !member.roles.includes(entry.id)) continue;
+      roleAllow |= BigInt(entry.allow);
+      roleDeny |= BigInt(entry.deny);
+    }
+    apply(roleAllow, roleDeny);
+    const memberOverwrite = overwrites.find((entry) => entry.type === 1 && entry.id === user.id);
+    if (memberOverwrite) apply(BigInt(memberOverwrite.allow), BigInt(memberOverwrite.deny));
+    const required = PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessages;
+    return (permissions & required) === required;
+  }
+
+  public async sendChannelMessage(channelId: string, content: string): Promise<void> {
+    if (this.rest.post === undefined) throw new Error('Discord REST client does not support POST');
+    await this.rest.post(Routes.channelMessages(channelId), { body: { content } });
+  }
+
   public async addRole(input: {
     guildId: string;
     userId: string;
@@ -101,7 +177,8 @@ export class DiscordRestSetupAdapter {
     roleId: string;
     reason: string;
   }): Promise<void> {
-    if (this.rest.delete === undefined) throw new Error('Discord REST client does not support DELETE');
+    if (this.rest.delete === undefined)
+      throw new Error('Discord REST client does not support DELETE');
     await this.rest.delete(Routes.guildMemberRole(input.guildId, input.userId, input.roleId), {
       reason: input.reason,
     });
@@ -123,6 +200,7 @@ export function createDiscordRestSetupAdapter(token: string): DiscordRestSetupAd
   const rest = new REST({ version: '10' }).setToken(token);
   return new DiscordRestSetupAdapter({
     get: (route) => rest.get(route),
+    post: (route, options) => rest.post(route, options),
     patch: (route, options) => rest.patch(route, options),
     put: (route, options) => rest.put(route, options),
     delete: (route, options) => rest.delete(route, options),

@@ -110,7 +110,9 @@ h2 {
   gap: 1rem;
 }
 .guildCard {
-  transition: border-color 120ms ease, background-color 120ms ease;
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease;
 }
 .guildCard:hover {
   background: #313338;
@@ -331,6 +333,44 @@ button:disabled {
 }
 .metadataForm button {
   justify-self: start;
+}
+
+.loggingForm {
+  margin-top: 1rem;
+  max-width: 42rem;
+}
+
+.logFilters {
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  margin-top: 1rem;
+}
+
+.ledgerPanel {
+  margin-top: 1rem;
+}
+
+.ledgerTableWrap {
+  margin-top: 1rem;
+  overflow-x: auto;
+}
+
+.ledgerTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  text-align: left;
+}
+
+.ledgerTable th,
+.ledgerTable td {
+  padding: 0.7rem;
+  border-bottom: 1px solid #3f4147;
+  white-space: nowrap;
+}
+
+.ledgerTable th {
+  color: #b5bac1;
+  font-weight: 600;
 }
 
 .policyEditor {
