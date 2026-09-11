@@ -7,3 +7,4 @@ export * from './repositories/security-manager-repository.js';
 export * from './repositories/policy-decision-repository.js';
 export * from './repositories/warning-repository.js';
 export * from './repositories/security-ledger-repository.js';
+export * from './repositories/security-repository.js';
