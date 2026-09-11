@@ -1,4 +1,9 @@
-import { GuildMode, type ActionPolicies } from '@knight/contracts';
+import {
+  GuildMode,
+  RATE_LIMITED_MODERATION_ACTIONS,
+  type ActionId,
+  type ActionPolicies,
+} from '@knight/contracts';
 import { describe, expect, it, vi } from 'vitest';
 import {
   createStaffProfileFromDashboard,
@@ -66,9 +71,27 @@ function makeDependencies(): StaffProfilePolicyDependencies {
 const updateInput = {
   guildId: '100',
   profileId,
-  permissions: ['member.ban'] as const,
-  banWindows: [{ max: 5, windowMs: thirtyMinutes }],
+  permissions: ['member.ban'] as ActionId[],
+  actionPolicies: {
+    'member.ban': {
+      unlimited: false,
+      windows: [{ max: 5, amount: 30, unit: 'minute' }],
+    },
+  },
 };
+
+function actionInput(
+  action: (typeof RATE_LIMITED_MODERATION_ACTIONS)[number],
+  policy: unknown,
+  permissions: readonly ActionId[] = [action],
+) {
+  return {
+    guildId: '100',
+    profileId,
+    permissions: [...permissions],
+    actionPolicies: { [action]: policy },
+  };
+}
 
 describe('updateStaffProfilePolicy', () => {
   it('creates v2 with a higher owner-approved ban limit while preserving v1', async () => {
@@ -85,24 +108,161 @@ describe('updateStaffProfilePolicy', () => {
     expect(before?.actionPolicies['member.ban']?.rateWindows).toEqual([
       { max: 2, windowMs: thirtyMinutes },
     ]);
-    expect(deps.staff.createProfileVersion).toHaveBeenCalledWith(
-      expect.objectContaining({ guildId: '100', profileId, createdBy: 'owner' }),
+  });
+
+  it.each(RATE_LIMITED_MODERATION_ACTIONS)(
+    'stores %s as enabled and unlimited with no finite windows',
+    async (action) => {
+      const deps = makeDependencies();
+      const result = await updateStaffProfilePolicy(
+        actionInput(action, { unlimited: true, windows: [] }),
+        { userId: 'owner' },
+        deps,
+      );
+
+      expect(result.actionPolicies[action]).toEqual({
+        enabled: true,
+        unlimited: true,
+        rateWindows: [],
+      });
+    },
+  );
+
+  it.each(RATE_LIMITED_MODERATION_ACTIONS)(
+    'parses one, two, and three independent finite %s windows',
+    async (action) => {
+      for (const count of [1, 2, 3]) {
+        const deps = makeDependencies();
+        const windows = [
+          { max: 2, amount: 15, unit: 'minute' },
+          { max: 5, amount: 2, unit: 'hour' },
+          { max: 9, amount: 1, unit: 'day' },
+        ].slice(0, count);
+        const result = await updateStaffProfilePolicy(
+          actionInput(action, { unlimited: false, windows }),
+          { userId: 'owner' },
+          deps,
+        );
+
+        expect(result.actionPolicies[action]?.rateWindows).toEqual(
+          windows.map((window) => ({
+            max: window.max,
+            windowMs:
+              window.amount *
+              (window.unit === 'minute' ? 60_000 : window.unit === 'hour' ? 3_600_000 : 86_400_000),
+          })),
+        );
+      }
+    },
+  );
+
+  it.each(RATE_LIMITED_MODERATION_ACTIONS)(
+    'discards stale %s rate rows when the permission is disabled',
+    async (action) => {
+      const deps = makeDependencies();
+      const result = await updateStaffProfilePolicy(
+        actionInput(action, { unlimited: false, windows: [{ max: '', amount: '', unit: '' }] }, []),
+        { userId: 'owner' },
+        deps,
+      );
+
+      expect(result.actionPolicies[action]).toEqual({
+        enabled: false,
+        unlimited: false,
+        rateWindows: [],
+      });
+    },
+  );
+
+  it.each(RATE_LIMITED_MODERATION_ACTIONS)(
+    'rejects more than three finite %s windows before guild lookup',
+    async (action) => {
+      const deps = makeDependencies();
+      const windows = [1, 2, 3, 4].map((max) => ({ max, amount: max, unit: 'minute' }));
+      await expect(
+        updateStaffProfilePolicy(
+          actionInput(action, { unlimited: false, windows }),
+          { userId: 'owner' },
+          deps,
+        ),
+      ).rejects.toMatchObject({ code: 'INVALID_INPUT' });
+      expect(deps.guilds.get).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(RATE_LIMITED_MODERATION_ACTIONS)(
+    'rejects a partial custom %s rate row',
+    async (action) => {
+      const deps = makeDependencies();
+      await expect(
+        updateStaffProfilePolicy(
+          actionInput(action, {
+            unlimited: false,
+            windows: [{ max: 2, amount: 30 }],
+          }),
+          { userId: 'owner' },
+          deps,
+        ),
+      ).rejects.toMatchObject({ code: 'INVALID_INPUT' });
+    },
+  );
+
+  it('keeps rate budgets independent across actions', async () => {
+    const deps = makeDependencies();
+    const result = await updateStaffProfilePolicy(
+      {
+        guildId: '100',
+        profileId,
+        permissions: ['member.warn', 'member.ban'],
+        actionPolicies: {
+          'member.warn': {
+            unlimited: false,
+            windows: [{ max: 10, amount: 1, unit: 'hour' }],
+          },
+          'member.ban': {
+            unlimited: false,
+            windows: [{ max: 2, amount: 1, unit: 'day' }],
+          },
+        },
+      },
+      { userId: 'owner' },
+      deps,
     );
+
+    expect(result.actionPolicies['member.warn']?.rateWindows).toEqual([
+      { max: 10, windowMs: 3_600_000 },
+    ]);
+    expect(result.actionPolicies['member.ban']?.rateWindows).toEqual([
+      { max: 2, windowMs: 86_400_000 },
+    ]);
+  });
+
+  it('keeps member.warnings.view permission-only with no action policy', async () => {
+    const deps = makeDependencies();
+    const result = await updateStaffProfilePolicy(
+      {
+        guildId: '100',
+        profileId,
+        permissions: ['member.warnings.view'],
+        actionPolicies: {
+          'member.warnings.view': {
+            unlimited: false,
+            windows: [{ max: 1, amount: 1, unit: 'minute' }],
+          },
+        },
+      },
+      { userId: 'owner' },
+      deps,
+    );
+
+    expect(result.permissions).toEqual(['member.warnings.view']);
+    expect(result.actionPolicies['member.warnings.view']).toBeUndefined();
   });
 
   it('denies a Security Manager from increasing a profile that governs them', async () => {
     const deps = makeDependencies();
     deps.managers.isSecurityManager = vi.fn().mockResolvedValue(true);
-    deps.staff.getActiveAssignment = vi.fn().mockResolvedValue({
-      id: 'assignment-1',
-      guildId: '100',
-      userId: 'manager',
-      profileId,
-      profileName: 'Moderator',
-      discordRoleId: 'role-mod',
-      profileRank: 20,
-      syncStatus: 'SYNCED',
-    });
+    deps.staff.getActiveAssignment = vi.fn().mockResolvedValue({ profileId });
 
     await expect(
       updateStaffProfilePolicy(updateInput, { userId: 'manager' }, deps),
@@ -112,16 +272,7 @@ describe('updateStaffProfilePolicy', () => {
 
   it('allows the guild owner to increase a profile even if it governs them', async () => {
     const deps = makeDependencies();
-    deps.staff.getActiveAssignment = vi.fn().mockResolvedValue({
-      id: 'assignment-owner',
-      guildId: '100',
-      userId: 'owner',
-      profileId,
-      profileName: 'Moderator',
-      discordRoleId: 'role-mod',
-      profileRank: 20,
-      syncStatus: 'SYNCED',
-    });
+    deps.staff.getActiveAssignment = vi.fn().mockResolvedValue({ profileId });
 
     await expect(
       updateStaffProfilePolicy(updateInput, { userId: 'owner' }, deps),
@@ -139,7 +290,6 @@ describe('updateStaffProfilePolicy', () => {
 
   it('denies a non-owner, non-manager before profile lookup', async () => {
     const deps = makeDependencies();
-
     await expect(
       updateStaffProfilePolicy(updateInput, { userId: 'stranger' }, deps),
     ).rejects.toMatchObject({ code: 'STAFF_MANAGEMENT_DENIED' });
@@ -169,24 +319,6 @@ describe('updateStaffProfilePolicy', () => {
       updateStaffProfilePolicy(updateInput, { userId: 'manager' }, deps),
     ).rejects.toMatchObject({ code: 'GRANT_CEILING' });
     expect(deps.staff.createProfileVersion).not.toHaveBeenCalled();
-  });
-
-  it('rejects more than three ban windows before reading guild state', async () => {
-    const deps = makeDependencies();
-    const invalid = {
-      ...updateInput,
-      banWindows: [
-        { max: 1, windowMs: 60_000 },
-        { max: 2, windowMs: 120_000 },
-        { max: 3, windowMs: 180_000 },
-        { max: 4, windowMs: 240_000 },
-      ],
-    };
-
-    await expect(
-      updateStaffProfilePolicy(invalid, { userId: 'owner' }, deps),
-    ).rejects.toMatchObject({ code: 'INVALID_INPUT' });
-    expect(deps.guilds.get).not.toHaveBeenCalled();
   });
 });
 

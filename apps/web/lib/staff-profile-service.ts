@@ -1,4 +1,10 @@
-import { ACTION_IDS, GuildMode, type ActionId, type ActionPolicies } from '@knight/contracts';
+import {
+  ACTION_IDS,
+  GuildMode,
+  RATE_LIMITED_MODERATION_ACTIONS,
+  type ActionId,
+  type ActionPolicies,
+} from '@knight/contracts';
 import type {
   StaffProfileRecord,
   StaffProfileVersionRecord,
@@ -101,10 +107,34 @@ const UpdatePolicySchema = z.object({
   guildId: z.string().min(1),
   profileId: z.string().uuid(),
   permissions: z.array(z.enum(ACTION_IDS)),
-  banWindows: z
-    .array(z.object({ max: z.number().int().positive(), windowMs: z.number().int().positive() }))
-    .max(3),
+  actionPolicies: z.record(z.string(), z.unknown()),
 });
+
+const RateWindowInputSchema = z.object({
+  max: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  amount: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  unit: z.enum(['minute', 'hour', 'day']),
+});
+
+const RatePolicyInputSchema = z.object({
+  unlimited: z.boolean(),
+  windows: z.array(z.unknown()),
+});
+
+const RATE_WINDOW_MULTIPLIERS = {
+  minute: 60_000,
+  hour: 3_600_000,
+  day: 86_400_000,
+} as const;
+
+const RATE_LIMITED_ACTION_SET = new Set<ActionId>(RATE_LIMITED_MODERATION_ACTIONS);
+
+type ParsedPolicyInput = Readonly<{
+  guildId: string;
+  profileId: string;
+  permissions: readonly ActionId[];
+  actionPolicies: ActionPolicies;
+}>;
 
 const ProfileMetadataSchema = z.object({
   guildId: z.string().min(1),
@@ -145,15 +175,61 @@ function completeProfile(
   return profile as StaffProfileVersion & { rank: number; discordRoleId: string };
 }
 
-function parseInput(input: unknown): z.infer<typeof UpdatePolicySchema> {
+function invalidPolicyInput(): never {
+  throw new StaffProfilePolicyError(
+    'INVALID_INPUT',
+    'The Staff Profile policy input is invalid.',
+  );
+}
+
+function parseRateWindow(value: unknown): { max: number; windowMs: number } {
+  const parsed = RateWindowInputSchema.safeParse(value);
+  if (!parsed.success) return invalidPolicyInput();
+  const multiplier = RATE_WINDOW_MULTIPLIERS[parsed.data.unit];
+  const windowMs = parsed.data.amount * multiplier;
+  if (!Number.isSafeInteger(windowMs) || windowMs <= 0) return invalidPolicyInput();
+  return { max: parsed.data.max, windowMs };
+}
+
+function parseInput(input: unknown): ParsedPolicyInput {
   const parsed = UpdatePolicySchema.safeParse(input);
-  if (!parsed.success) {
-    throw new StaffProfilePolicyError(
-      'INVALID_INPUT',
-      'The Staff Profile policy input is invalid.',
-    );
+  if (!parsed.success) return invalidPolicyInput();
+
+  const enabled = new Set<ActionId>(parsed.data.permissions);
+  const actionPolicies: Partial<Record<ActionId, {
+    enabled: boolean;
+    unlimited: boolean;
+    rateWindows: readonly { max: number; windowMs: number }[];
+  }>> = {};
+
+  for (const action of RATE_LIMITED_MODERATION_ACTIONS) {
+    if (!enabled.has(action)) {
+      actionPolicies[action] = { enabled: false, unlimited: false, rateWindows: [] };
+      continue;
+    }
+
+    const policy = RatePolicyInputSchema.safeParse(parsed.data.actionPolicies[action]);
+    if (!policy.success) return invalidPolicyInput();
+    if (policy.data.unlimited) {
+      actionPolicies[action] = { enabled: true, unlimited: true, rateWindows: [] };
+      continue;
+    }
+    if (policy.data.windows.length < 1 || policy.data.windows.length > 3) {
+      return invalidPolicyInput();
+    }
+    actionPolicies[action] = {
+      enabled: true,
+      unlimited: false,
+      rateWindows: policy.data.windows.map(parseRateWindow),
+    };
   }
-  return parsed.data;
+
+  return {
+    guildId: parsed.data.guildId,
+    profileId: parsed.data.profileId,
+    permissions: parsed.data.permissions,
+    actionPolicies,
+  };
 }
 
 function parseMetadataInput(input: unknown): z.infer<typeof ProfileMetadataSchema> {
@@ -174,19 +250,21 @@ function parseMetadataUpdate(input: unknown): z.infer<typeof UpdateProfileMetada
 
 function nextPolicy(
   current: StaffProfileVersion,
-  input: z.infer<typeof UpdatePolicySchema>,
+  input: ParsedPolicyInput,
 ): StaffProfileVersion {
-  const banEnabled = input.permissions.includes('member.ban');
+  const preservedPolicies = Object.fromEntries(
+    Object.entries(current.actionPolicies).filter(
+      ([action]) =>
+        !RATE_LIMITED_ACTION_SET.has(action as ActionId) && action !== 'member.warnings.view',
+    ),
+  ) as ActionPolicies;
+
   return {
     ...current,
     permissions: input.permissions,
     actionPolicies: {
-      ...current.actionPolicies,
-      'member.ban': {
-        enabled: banEnabled,
-        unlimited: banEnabled && input.banWindows.length === 0,
-        rateWindows: input.banWindows,
-      },
+      ...preservedPolicies,
+      ...input.actionPolicies,
     },
   };
 }

@@ -75,13 +75,13 @@ describe('updateStaffProfilePolicyAction', () => {
     formData.set('guildId', '100');
     formData.set('profileId', '11111111-1111-4111-8111-111111111111');
     formData.set('actorUserId', 'forged-owner');
-    formData.set('memberBan', 'on');
-    formData.set('banMax0', '5');
-    formData.set('banWindowMs0', String(30 * 60_000));
-    formData.set('banMax1', '');
-    formData.set('banWindowMs1', '');
-    formData.set('banMax2', '');
-    formData.set('banWindowMs2', '');
+    formData.set('permission:member.kick', 'on');
+    formData.set('limitMode:member.kick', 'unlimited');
+    formData.set('permission:member.ban', 'on');
+    formData.set('limitMode:member.ban', 'custom');
+    formData.set('limitMax:member.ban:0', '5');
+    formData.set('limitAmount:member.ban:0', '30');
+    formData.set('limitUnit:member.ban:0', 'minute');
 
     await updateStaffProfilePolicyAction(formData);
 
@@ -99,11 +99,69 @@ describe('updateStaffProfilePolicyAction', () => {
         guildId: '100',
         profileId: '11111111-1111-4111-8111-111111111111',
         permissions: ['member.kick', 'member.ban'],
-        banWindows: [{ max: 5, windowMs: 30 * 60_000 }],
+        actionPolicies: expect.objectContaining({
+          'member.kick': { unlimited: true, windows: [] },
+          'member.ban': {
+            unlimited: false,
+            windows: [{ max: 5, amount: 30, unit: 'minute' }],
+          },
+        }),
       }),
       { userId: 'session-manager' },
       repositories,
     );
+  });
+
+  it('parses independent action budgets and keeps warning history rate-free', async () => {
+    const repositories = {
+      staff: {
+        getCurrentProfileVersion: vi.fn().mockResolvedValue({
+          permissions: ['security.policy.view'],
+        }),
+      },
+      guilds: {},
+      managers: {},
+    };
+    mocks.auth.mockResolvedValue({ user: { id: 'owner' } });
+    mocks.getWebRuntime.mockReturnValue({ repositories });
+    mocks.requireGuildAccess.mockResolvedValue('OWNER');
+    mocks.updatePolicy.mockResolvedValue({ version: 2 });
+
+    const formData = new FormData();
+    formData.set('guildId', '100');
+    formData.set('profileId', '11111111-1111-4111-8111-111111111111');
+    formData.set('permission:member.warn', 'on');
+    formData.set('limitMode:member.warn', 'custom');
+    formData.set('limitMax:member.warn:0', '10');
+    formData.set('limitAmount:member.warn:0', '2');
+    formData.set('limitUnit:member.warn:0', 'hour');
+    formData.set('permission:member.warnings.view', 'on');
+    formData.set('permission:message.purge', 'on');
+    formData.set('limitMode:message.purge', 'unlimited');
+
+    await updateStaffProfilePolicyAction(formData);
+
+    expect(mocks.updatePolicy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        permissions: [
+          'security.policy.view',
+          'member.warn',
+          'message.purge',
+          'member.warnings.view',
+        ],
+        actionPolicies: expect.objectContaining({
+          'member.warn': {
+            unlimited: false,
+            windows: [{ max: 10, amount: 2, unit: 'hour' }],
+          },
+          'message.purge': { unlimited: true, windows: [] },
+        }),
+      }),
+      { userId: 'owner' },
+      repositories,
+    );
+    const submitted = mocks.updatePolicy.mock.calls[0]?.[0];
+    expect(submitted.actionPolicies['member.warnings.view']).toBeUndefined();
   });
 });
 

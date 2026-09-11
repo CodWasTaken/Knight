@@ -1,6 +1,10 @@
 'use server';
 
-import type { ActionId } from '@knight/contracts';
+import {
+  RATE_LIMITED_MODERATION_ACTIONS,
+  READ_ONLY_ACTIONS,
+  type ActionId,
+} from '@knight/contracts';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { auth } from '../../../../auth';
@@ -21,13 +25,54 @@ function requiredString(formData: FormData, name: string): string {
   return value;
 }
 
-function parseBanWindows(formData: FormData) {
-  return [0, 1, 2].flatMap((index) => {
-    const max = formData.get(`banMax${index}`);
-    const windowMs = formData.get(`banWindowMs${index}`);
-    if (max === '' && windowMs === '') return [];
-    return [{ max: Number(max), windowMs: Number(windowMs) }];
-  });
+const EDITABLE_MODERATION_ACTIONS = [
+  ...RATE_LIMITED_MODERATION_ACTIONS,
+  ...READ_ONLY_ACTIONS,
+] as const;
+const EDITABLE_MODERATION_ACTION_SET = new Set<ActionId>(EDITABLE_MODERATION_ACTIONS);
+
+function optionalString(formData: FormData, name: string): string | undefined {
+  const value = formData.get(name);
+  return typeof value === 'string' ? value : undefined;
+}
+
+function optionalNumber(value: string | undefined): number | undefined {
+  if (value === undefined || value === '') return undefined;
+  return Number(value);
+}
+
+function parseActionPolicies(formData: FormData): Record<string, unknown> {
+  return Object.fromEntries(
+    RATE_LIMITED_MODERATION_ACTIONS.map((action) => {
+      const windows = Array.from({ length: 10 }, (_, index) => {
+        const max = optionalString(formData, `limitMax:${action}:${index}`);
+        const amount = optionalString(formData, `limitAmount:${action}:${index}`);
+        const unit = optionalString(formData, `limitUnit:${action}:${index}`);
+        if ([max, amount, unit].every((value) => value === undefined || value === '')) return null;
+        return {
+          max: optionalNumber(max),
+          amount: optionalNumber(amount),
+          unit: unit === '' ? undefined : unit,
+        };
+      }).filter((window) => window !== null);
+
+      return [
+        action,
+        {
+          unlimited: optionalString(formData, `limitMode:${action}`) !== 'custom',
+          windows,
+        },
+      ];
+    }),
+  );
+}
+
+function parsePermissions(formData: FormData, current: readonly ActionId[]): ActionId[] {
+  const permissions = current.filter((action) => !EDITABLE_MODERATION_ACTION_SET.has(action));
+  for (const action of EDITABLE_MODERATION_ACTIONS) {
+    if (formData.get(`permission:${action}`) === 'on') permissions.push(action);
+  }
+  return permissions;
 }
 
 async function authorizedStaffRuntime(formData: FormData): Promise<{
@@ -100,15 +145,12 @@ export async function updateStaffProfilePolicyAction(formData: FormData): Promis
     throw new Error('Staff Profile not found.');
   }
 
-  const permissions: ActionId[] = current.permissions.filter((action) => action !== 'member.ban');
-  if (formData.get('memberBan') === 'on') permissions.push('member.ban');
-
   await updateStaffProfilePolicy(
     {
       guildId,
       profileId,
-      permissions,
-      banWindows: parseBanWindows(formData),
+      permissions: parsePermissions(formData, current.permissions),
+      actionPolicies: parseActionPolicies(formData),
     },
     { userId: actorUserId },
     runtime.repositories,
