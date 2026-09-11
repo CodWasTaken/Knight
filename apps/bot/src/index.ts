@@ -124,6 +124,7 @@ export function createCommandRouterDependencies(input: {
         guilds,
         managers,
         staff: staffProfiles,
+        securityLedger,
         discord: input.discord,
       }),
       migrations: new GuardedMigrationService({

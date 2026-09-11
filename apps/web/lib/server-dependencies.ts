@@ -1,6 +1,6 @@
 import type { Database } from '@knight/database/client';
 import { GuildRepository } from '@knight/database/repositories/guild-repository';
-import { SecurityLedgerRepository } from '@knight/database';
+import { SecurityLedgerRepository } from '@knight/database/repositories/security-ledger-repository';
 import { SecurityManagerRepository } from '@knight/database/repositories/security-manager-repository';
 import { StaffRepository } from '@knight/database/repositories/staff-repository';
 

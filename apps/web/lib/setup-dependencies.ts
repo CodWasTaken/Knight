@@ -1,6 +1,6 @@
 import { GuardedMigrationService, SetupService } from '@knight/bot/setup';
 import { SecurityRecorder } from '@knight/bot/security';
-import type { DiscordActionPort } from '@knight/discord';
+import type { DiscordActionPort } from '@knight/discord/port';
 import type { WebRepositories } from './server-dependencies';
 
 export type WebSetupServices = Readonly<{
@@ -22,6 +22,7 @@ export function createWebSetupServices(input: {
       guilds: input.repositories.guilds,
       managers: input.repositories.managers,
       staff: input.repositories.staff,
+      securityLedger: input.repositories.securityLedger,
       discord: input.discord,
     }),
     migrations: new GuardedMigrationService({

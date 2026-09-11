@@ -9,7 +9,7 @@ import type {
   StaffProfileRecord,
   StaffProfileVersionRecord,
 } from '@knight/database';
-import type { DiscordActionPort, DiscordGuildState } from '@knight/discord';
+import type { DiscordActionPort, DiscordGuildState } from '@knight/discord/port';
 import { wouldIncreaseOwnAuthority, type AuthoritySnapshot } from '@knight/security';
 import { z } from 'zod';
 

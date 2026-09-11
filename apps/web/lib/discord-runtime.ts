@@ -1,7 +1,7 @@
 import 'server-only';
 
-import { createDiscordRestSetupAdapter } from '@knight/discord';
-import type { DiscordActionPort } from '@knight/discord';
+import type { DiscordActionPort } from '@knight/discord/port';
+import { createDiscordRestSetupAdapter } from '@knight/discord/rest-setup-adapter';
 import { getWebRuntime, type WebRuntime } from './server-runtime';
 
 export type WebDiscordAdapter = Pick<

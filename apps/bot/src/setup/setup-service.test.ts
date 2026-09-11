@@ -25,6 +25,9 @@ function makeDependencies(): SetupDependencies {
         .fn()
         .mockResolvedValue([{ id: 'profile-1', discordRoleId: 'role-1', enabled: true }]),
     },
+    securityLedger: {
+      getLoggingSettings: vi.fn().mockResolvedValue(null),
+    },
     discord: {
       getGuildState: vi.fn().mockResolvedValue({
         guildId: '100',
@@ -66,6 +69,40 @@ describe('SetupService', () => {
     await service.advanceStep('100', 'owner');
 
     expect(deps.guilds.updateSetupState).toHaveBeenCalledWith('100', 'HEALTH', ['WELCOME']);
+  });
+
+  it('requires an explicit logging choice before advancing to protection', async () => {
+    const deps = makeDependencies();
+    deps.guilds.getSetupState = vi.fn().mockResolvedValue({
+      guildId: '100',
+      step: 'LOGGING',
+      completedSteps: ['WELCOME', 'HEALTH', 'STAFF', 'POLICIES'],
+      updatedAt: new Date(),
+    });
+    const service = new SetupService(deps);
+
+    await expect(service.advanceStep('100', 'owner')).rejects.toMatchObject({
+      code: 'LOGGING_NOT_CONFIGURED',
+    });
+    expect(deps.guilds.updateSetupState).not.toHaveBeenCalled();
+
+    deps.securityLedger.getLoggingSettings = vi.fn().mockResolvedValue({
+      guildId: '100',
+      securityChannelId: null,
+      moderationChannelId: null,
+      updatedBy: 'owner',
+      updatedAt: new Date(),
+    });
+
+    await service.advanceStep('100', 'owner');
+
+    expect(deps.guilds.updateSetupState).toHaveBeenCalledWith('100', 'PROTECTION', [
+      'WELCOME',
+      'HEALTH',
+      'STAFF',
+      'POLICIES',
+      'LOGGING',
+    ]);
   });
 
   it('allows a Security Manager to move Observe to Test and Test back to Observe', async () => {

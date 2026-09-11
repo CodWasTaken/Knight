@@ -2,7 +2,11 @@
   "name": "@knight/discord",
   "private": true,
   "type": "module",
-  "exports": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./port": "./src/port.ts",
+    "./rest-setup-adapter": "./src/rest-setup-adapter.ts"
+  },
   "scripts": {
     "lint": "eslint src",
     "typecheck": "tsc --noEmit -p tsconfig.json",

@@ -30,6 +30,9 @@ export interface SetupDependencies {
       }[]
     >;
   };
+  securityLedger: {
+    getLoggingSettings(guildId: string): Promise<unknown | null>;
+  };
   discord: {
     getGuildState(guildId: string): Promise<{
       guildId: string;
@@ -153,6 +156,15 @@ export class SetupService {
     }
     if (next === undefined) {
       throw new SetupError('SETUP_ALREADY_COMPLETE', 'Knight setup is already complete.');
+    }
+    if (
+      setup.step === 'LOGGING' &&
+      (await this.dependencies.securityLedger.getLoggingSettings(guildId)) === null
+    ) {
+      throw new SetupError(
+        'LOGGING_NOT_CONFIGURED',
+        'Configure logging destinations before continuing. Choosing Disabled is valid.',
+      );
     }
     const completed = [...new Set<SetupStep>([...setup.completedSteps, setup.step])];
     await this.dependencies.guilds.updateSetupState(guildId, next, completed);

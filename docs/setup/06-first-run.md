@@ -10,10 +10,13 @@ Knight starts in Observe so you can confirm service health, Discord hierarchy, S
 2. Run `/setup` and work through the persistent setup state.
 3. Open the dashboard and create Staff Profiles by mapping existing manageable Discord roles and assigning a Knight rank.
 4. Configure only the moderation capabilities each profile needs and set independent per-action limits.
-5. Assign staff with `/staff assign user:<member> profile:<profile>` and confirm state with `/staff inspect user:<member>`.
-6. Add explicit Knight Security Managers only where needed. Discord Administrator alone does not grant Knight management authority.
-7. Move from Observe to Test.
-8. Exercise Knight's moderation commands with controlled test targets/messages before Guarded.
+5. Open **Logging** and explicitly save the Security and Moderation notification destinations. Either destination may be **Disabled**; PostgreSQL remains the authoritative Security Ledger.
+6. Assign staff with `/staff assign user:<member> profile:<profile>` and confirm state with `/staff inspect user:<member>`.
+7. Add explicit Knight Security Managers only where needed. Discord Administrator alone does not grant Knight management authority.
+8. Move from Observe to Test.
+9. Exercise Knight's moderation commands with controlled test targets/messages before Guarded.
+
+The setup wizard will not advance past `LOGGING` until logging settings have been saved once. Saving both destinations as **Disabled** satisfies this gate and does not require Knight to create or access a Discord notification channel.
 
 ## Moderation command surface
 

@@ -1,4 +1,7 @@
-import type { SecurityLedgerFilters, SecurityLedgerSeverity } from '@knight/database';
+import type {
+  SecurityLedgerFilters,
+  SecurityLedgerSeverity,
+} from '@knight/database/repositories/security-ledger-repository';
 import { getWebRuntime } from '../../../../lib/server-runtime';
 
 type SearchParams = Record<string, string | string[] | undefined>;
