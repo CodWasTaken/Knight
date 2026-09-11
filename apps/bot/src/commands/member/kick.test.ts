@@ -4,7 +4,7 @@ import { executeMemberKick } from './kick.js';
 const allow: SecurityDecision = { decision: PolicyDecision.Allow, code: 'ALLOWED', reason: 'Allowed.', policyVersionId: 'v1', metadata: {} };
 const input = { guildId: '100', actorUserId: '42', targetUserId: '77', knightBotUserId: '999', reason: 'raid', nowMs: 10_000 } as const;
 function deps(decision: SecurityDecision = allow) { return {
-  authorize: vi.fn().mockResolvedValue(decision), staffProfiles: { getEffectiveProfile: vi.fn() }, rateLimits: { consume: vi.fn() }, decisions: { record: vi.fn() },
+  authorize: vi.fn().mockResolvedValue(decision), staffProfiles: { getEffectiveProfile: vi.fn() }, rateLimits: { consume: vi.fn() }, decisions: { record: vi.fn() }, securityRecorder: { record: vi.fn().mockResolvedValue({ entryHash: 'ledger-hash' }) },
   correlations: { create: vi.fn().mockResolvedValue(undefined) }, createCorrelationId: vi.fn(() => 'c1'),
   discord: { getGuildState: vi.fn(), getMemberState: vi.fn(), kickMember: vi.fn().mockResolvedValue(undefined) },
 }; }

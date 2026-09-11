@@ -2,6 +2,7 @@ import type { ActionId, ActionPolicies } from '@knight/contracts';
 import type { StaffProfileRecord, StaffProfileVersionRecord } from '@knight/database';
 import type { DiscordActionPort, DiscordMemberState } from '@knight/discord';
 import { wouldIncreaseOwnAuthority, type AuthoritySnapshot } from '@knight/security';
+import type { SecurityRecorder } from '../security/security-recorder.js';
 
 export type AssignmentSyncStatus = 'PENDING' | 'SYNCED' | 'NEEDS_REPAIR';
 
@@ -25,7 +26,7 @@ export interface RoleSyncStaffPort {
     permissions: readonly ActionId[];
     actionPolicies: ActionPolicies;
     createdBy: string;
-  }): Promise<unknown>;
+  }): Promise<{ profile: { id: string }; version: { id: string } }>;
   getCurrentProfileVersion(
     guildId: string,
     profileId: string,
@@ -51,6 +52,7 @@ export type RoleSyncDependencies = Readonly<{
   guilds: { get(guildId: string): Promise<{ ownerId: string } | null> };
   managers: { isSecurityManager(guildId: string, userId: string): Promise<boolean> };
   staff: RoleSyncStaffPort;
+  securityRecorder: Pick<SecurityRecorder, 'record'>;
   discord: Pick<DiscordActionPort, 'addRole' | 'removeRole' | 'getMemberState'>;
 }>;
 export class StaffManagementError extends Error {
@@ -95,6 +97,26 @@ function toAuthority(profile: StaffProfileVersionRecord | null): AuthoritySnapsh
 
 export class RoleSyncService {
   public constructor(private readonly dependencies: RoleSyncDependencies) {}
+
+  private async recordConfig(
+    action: string,
+    guildId: string,
+    actorUserId: string,
+    targetId: string | null,
+    metadata: Record<string, unknown> = {},
+  ): Promise<void> {
+    try {
+      await this.dependencies.securityRecorder.record(
+        {
+          guildId, severity: 'INFO', source: 'CONFIG', action, actorUserId, targetId,
+          decisionId: null, incidentId: null, metadata,
+        },
+        'SECURITY',
+      );
+    } catch {
+      // The staff change is already durable; logging failure must not fake a rollback.
+    }
+  }
 
   private async staffManagerState(
     guildId: string,
@@ -175,7 +197,7 @@ export class RoleSyncService {
       }
     }
 
-    return this.dependencies.staff.createProfileWithInitialVersion({
+    const created = await this.dependencies.staff.createProfileWithInitialVersion({
       guildId: input.guildId,
       name: input.name,
       discordRoleId: input.discordRoleId,
@@ -184,6 +206,11 @@ export class RoleSyncService {
       actionPolicies: {},
       createdBy: input.actorUserId,
     });
+    await this.recordConfig('staff.profile.create', input.guildId, input.actorUserId, created.profile.id, {
+      discordRoleId: input.discordRoleId,
+      rank: input.rank,
+    });
+    return created;
   }
 
   public async assignByReference(input: {
@@ -263,6 +290,9 @@ export class RoleSyncService {
         });
       }
       await this.dependencies.staff.setAssignmentSyncStatus(input.guildId, assignment.id, 'SYNCED');
+      await this.recordConfig('staff.assignment.assign', input.guildId, input.actorUserId, input.userId, {
+        profileId: input.profileId, syncStatus: 'SYNCED',
+      });
       return { syncStatus: 'SYNCED' };
     } catch {
       await this.dependencies.staff.setAssignmentSyncStatus(
@@ -270,6 +300,9 @@ export class RoleSyncService {
         assignment.id,
         'NEEDS_REPAIR',
       );
+      await this.recordConfig('staff.assignment.assign', input.guildId, input.actorUserId, input.userId, {
+        profileId: input.profileId, syncStatus: 'NEEDS_REPAIR',
+      });
       return { syncStatus: 'NEEDS_REPAIR' };
     }
   }
@@ -313,6 +346,9 @@ export class RoleSyncService {
         deactivated.id,
         'SYNCED',
       );
+      await this.recordConfig('staff.assignment.remove', input.guildId, input.actorUserId, input.userId, {
+        profileId: assignment.profileId, syncStatus: 'SYNCED',
+      });
       return { removed: true, syncStatus: 'SYNCED' };
     } catch {
       await this.dependencies.staff.setAssignmentSyncStatus(
@@ -320,6 +356,9 @@ export class RoleSyncService {
         deactivated.id,
         'NEEDS_REPAIR',
       );
+      await this.recordConfig('staff.assignment.remove', input.guildId, input.actorUserId, input.userId, {
+        profileId: assignment.profileId, syncStatus: 'NEEDS_REPAIR',
+      });
       return { removed: true, syncStatus: 'NEEDS_REPAIR' };
     }
   }

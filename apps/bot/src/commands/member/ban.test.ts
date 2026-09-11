@@ -44,6 +44,9 @@ function makeDependencies(decision: SecurityDecision = allowDecision) {
     decisions: {
       record: vi.fn(),
     },
+    securityRecorder: {
+      record: vi.fn().mockResolvedValue({ entryHash: 'ledger-hash' }),
+    },
     correlations: {
       create: vi.fn().mockResolvedValue(undefined),
     },

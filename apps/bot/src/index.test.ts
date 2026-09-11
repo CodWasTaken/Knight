@@ -1,6 +1,7 @@
 import { WarningRepository } from '@knight/database';
 import { describe, expect, it, vi } from 'vitest';
 import { SecurityManagerService } from './security/security-manager-service.js';
+import { SecurityRecorder } from './security/security-recorder.js';
 import { GuardedMigrationService } from './setup/guarded-migration-service.js';
 import { SetupService } from './setup/setup-service.js';
 import { RoleSyncService } from './staff/role-sync-service.js';
@@ -77,6 +78,8 @@ describe('bot production composition', () => {
 
     expect(dependencies.roleSync).toBeInstanceOf(RoleSyncService);
     expect(dependencies.securityManagers).toBeInstanceOf(SecurityManagerService);
+    expect(dependencies.memberBan.securityRecorder).toBeInstanceOf(SecurityRecorder);
+    expect(dependencies.roleSync).toHaveProperty('dependencies.securityRecorder');
     expect(dependencies.setup.setup).toBeInstanceOf(SetupService);
     expect(dependencies.setup.migrations).toBeInstanceOf(GuardedMigrationService);
     expect(dependencies.memberBan.discord).toBe(discord);

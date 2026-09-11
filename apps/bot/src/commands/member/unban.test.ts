@@ -8,7 +8,7 @@ const input={ guildId:'100', actorUserId:'42', targetUserId:'77', knightBotUserI
 function deps(ownerId='1') { return {
   authorize: authorizeGuardedAction,
   staffProfiles:{ getEffectiveProfile:vi.fn(async(_g:string,u:string)=>u==='42'?profile('actor',10):u==='77'?profile('target',20):null) },
-  rateLimits:{ consume:vi.fn().mockResolvedValue({ allowed:true, windows:[] }) }, decisions:{ record:vi.fn().mockResolvedValue(undefined) },
+  rateLimits:{ consume:vi.fn().mockResolvedValue({ allowed:true, windows:[] }) }, decisions:{ record:vi.fn().mockResolvedValue(undefined) }, securityRecorder:{ record:vi.fn().mockResolvedValue({ entryHash:'ledger-hash' }) },
   correlations:{ create:vi.fn().mockResolvedValue(undefined) }, createCorrelationId:vi.fn(()=>'c1'),
   discord:{
     getGuildState:vi.fn().mockResolvedValue({ guildId:'100', ownerId, knightUserId:'999', knightRolePosition:100, knightPermissions:0n, roles:[] }),

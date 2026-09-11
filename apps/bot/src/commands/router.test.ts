@@ -24,7 +24,7 @@ function makeModerationDependencies(decision: SecurityDecision = denied) {
     authorize: vi.fn().mockResolvedValue(decision),
     staffProfiles: { getEffectiveProfile: vi.fn().mockResolvedValue(null) },
     rateLimits: { consume: vi.fn() },
-    decisions: { record: vi.fn() },
+    decisions: { record: vi.fn() }, securityRecorder: { record: vi.fn().mockResolvedValue({ entryHash: 'ledger-hash' }) },
     correlations: { create: vi.fn().mockResolvedValue(undefined) },
     discord: {
       getGuildState: vi.fn().mockResolvedValue({

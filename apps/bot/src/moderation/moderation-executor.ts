@@ -10,6 +10,7 @@ import type {
   GuardedActionRequest,
   RateLimitPort,
 } from '@knight/security';
+import type { SecurityRecorder } from '../security/security-recorder.js';
 import { createModerationStaffStatePort } from './staff-state-port.js';
 
 export type ModerationExecutionInput = Readonly<{
@@ -28,6 +29,7 @@ export type ModerationExecutorDependencies = Readonly<{
   staffProfiles: Pick<StaffRepository, 'getEffectiveProfile'>;
   rateLimits: RateLimitPort;
   decisions: DecisionLogPort;
+  securityRecorder: Pick<SecurityRecorder, 'record'>;
   correlations: Pick<ExecutionCorrelationStore, 'create'>;
   discord: Pick<DiscordActionPort, 'getGuildState' | 'getMemberState'>;
   createCorrelationId: () => string;
@@ -52,10 +54,18 @@ export async function executeModerationAction(
     targetId: input.targetUserId,
     nowMs: input.nowMs,
   };
+  let decisionId: string | null = null;
+  const decisions: DecisionLogPort = {
+    async record(requestToRecord, decisionToRecord) {
+      const stored = await dependencies.decisions.record(requestToRecord, decisionToRecord);
+      decisionId = typeof stored === 'string' ? stored : null;
+      return stored;
+    },
+  };
   const ports: GuardedActionPorts = {
     staffState: createModerationStaffStatePort(dependencies),
     rateLimits: dependencies.rateLimits,
-    decisions: dependencies.decisions,
+    decisions,
   };
 
   let decision: SecurityDecision;
@@ -65,8 +75,31 @@ export async function executeModerationAction(
     return { kind: 'SECURITY_UNAVAILABLE', executed: false };
   }
 
+  const ledgerInput = (outcome: string) => ({
+    guildId: input.guildId,
+    severity: 'INFO' as const,
+    source: 'KNIGHT',
+    action: input.action,
+    actorUserId: input.actorUserId,
+    targetId: input.targetUserId,
+    decisionId,
+    incidentId: null,
+    metadata: { outcome, decision: decision.decision, code: decision.code },
+  });
+
   if (decision.decision !== PolicyDecision.Allow) {
+    try {
+      await dependencies.securityRecorder.record(ledgerInput('DENIED'), 'MODERATION');
+    } catch {
+      return { kind: 'SECURITY_UNAVAILABLE', executed: false };
+    }
     return { kind: 'DENIED', executed: false, decision };
+  }
+
+  try {
+    await dependencies.securityRecorder.record(ledgerInput('AUTHORIZED'));
+  } catch {
+    return { kind: 'SECURITY_UNAVAILABLE', executed: false };
   }
 
   if (input.correlation === 'required') {
@@ -95,8 +128,18 @@ export async function executeModerationAction(
   try {
     await mutation(decision);
   } catch {
+    try {
+      await dependencies.securityRecorder.record(ledgerInput('MUTATION_FAILED'), 'MODERATION');
+    } catch {
+      // The action already failed; do not mask that outcome with a logging exception.
+    }
     return { kind: 'MUTATION_FAILED', executed: false, decision };
   }
 
+  try {
+    await dependencies.securityRecorder.record(ledgerInput('EXECUTED'), 'MODERATION');
+  } catch {
+    // The mutation already happened; the pre-mutation AUTHORIZED entry remains durable evidence.
+  }
   return { kind: 'EXECUTED', executed: true, decision };
 }

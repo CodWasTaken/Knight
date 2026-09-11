@@ -1,3 +1,4 @@
+import type { SecurityRecorder } from './security-recorder.js';
 export type SecurityManagerDependencies = Readonly<{
   guilds: { get(guildId: string): Promise<{ ownerId: string } | null> };
   managers: {
@@ -5,6 +6,7 @@ export type SecurityManagerDependencies = Readonly<{
     grant(input: { guildId: string; userId: string; grantedBy: string }): Promise<void>;
     revoke(guildId: string, userId: string): Promise<void>;
   };
+  securityRecorder: Pick<SecurityRecorder, 'record'>;
 }>;
 
 export class SecurityManagerError extends Error {
@@ -19,6 +21,20 @@ export class SecurityManagerError extends Error {
 
 export class SecurityManagerService {
   public constructor(private readonly dependencies: SecurityManagerDependencies) {}
+
+  private async record(action: string, guildId: string, actorUserId: string, targetId: string): Promise<void> {
+    try {
+      await this.dependencies.securityRecorder.record(
+        {
+          guildId, severity: 'INFO', source: 'SECURITY', action, actorUserId, targetId,
+          decisionId: null, incidentId: null, metadata: {},
+        },
+        'SECURITY',
+      );
+    } catch {
+      // Manager state is already durable; do not pretend it rolled back.
+    }
+  }
 
   private async requireOwner(guildId: string, actorUserId: string): Promise<void> {
     const guild = await this.dependencies.guilds.get(guildId);
@@ -46,6 +62,7 @@ export class SecurityManagerService {
       userId: input.userId,
       grantedBy: input.actorUserId,
     });
+    await this.record('security.manager.add', input.guildId, input.actorUserId, input.userId);
   }
 
   public async revoke(input: {
@@ -55,5 +72,6 @@ export class SecurityManagerService {
   }): Promise<void> {
     await this.requireOwner(input.guildId, input.actorUserId);
     await this.dependencies.managers.revoke(input.guildId, input.userId);
+    await this.record('security.manager.remove', input.guildId, input.actorUserId, input.userId);
   }
 }

@@ -31,6 +31,7 @@ function makeDependencies() {
       setAssignmentSyncStatus: vi.fn().mockResolvedValue(undefined),
       listProfiles: vi.fn().mockResolvedValue([]),
     },
+    securityRecorder: { record: vi.fn().mockResolvedValue({ entryHash: 'ledger-hash' }) },
     discord: {
       addRole: vi.fn().mockResolvedValue(undefined),
       removeRole: vi.fn().mockResolvedValue(undefined),
@@ -64,6 +65,15 @@ describe('RoleSyncService', () => {
       'assignment-1',
       'SYNCED',
     );
+    expect(deps.securityRecorder.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'staff.assignment.assign',
+        actorUserId: '1',
+        targetId: '42',
+        metadata: expect.objectContaining({ syncStatus: 'SYNCED' }),
+      }),
+      'SECURITY',
+    );
   });
 
   it('keeps the durable assignment and marks repair when Discord role sync fails', async () => {
@@ -84,6 +94,13 @@ describe('RoleSyncService', () => {
       '100',
       'assignment-1',
       'NEEDS_REPAIR',
+    );
+    expect(deps.securityRecorder.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'staff.assignment.assign',
+        metadata: expect.objectContaining({ syncStatus: 'NEEDS_REPAIR' }),
+      }),
+      'SECURITY',
     );
   });
   it('deactivates an assignment before removing the mapped Discord role', async () => {
@@ -108,6 +125,10 @@ describe('RoleSyncService', () => {
     expect(deactivateOrder).toBeLessThan(removeRoleOrder);
     expect(deps.discord.removeRole).toHaveBeenCalledWith(
       expect.objectContaining({ roleId: 'role-mod' }),
+    );
+    expect(deps.securityRecorder.record).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'staff.assignment.remove', targetId: '42' }),
+      'SECURITY',
     );
   });
 
@@ -214,6 +235,14 @@ describe('RoleSyncService', () => {
       actionPolicies: {},
       createdBy: '42',
     });
+    expect(deps.securityRecorder.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'staff.profile.create',
+        actorUserId: '42',
+        targetId: 'profile-helper',
+      }),
+      'SECURITY',
+    );
   });
 
   it('authorizes the actor before resolving a profile reference', async () => {

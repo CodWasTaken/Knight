@@ -7,7 +7,7 @@ const input = { guildId: '100', actorUserId: '42', targetUserId: '77', knightBot
 function deps(decision: SecurityDecision = allow) {
   return {
     authorize: vi.fn().mockResolvedValue(decision), staffProfiles: { getEffectiveProfile: vi.fn() },
-    rateLimits: { consume: vi.fn() }, decisions: { record: vi.fn() },
+    rateLimits: { consume: vi.fn() }, decisions: { record: vi.fn() }, securityRecorder: { record: vi.fn().mockResolvedValue({ entryHash: 'ledger-hash' }) },
     correlations: { create: vi.fn().mockResolvedValue(undefined) }, createCorrelationId: vi.fn(() => 'c1'),
     discord: { getGuildState: vi.fn(), getMemberState: vi.fn(), timeoutMember: vi.fn().mockResolvedValue(undefined) },
   };

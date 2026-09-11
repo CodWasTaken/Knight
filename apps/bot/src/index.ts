@@ -6,6 +6,7 @@ import {
   createDatabase,
   GuildRepository,
   PolicyDecisionRepository,
+  SecurityLedgerRepository,
   SecurityManagerRepository,
   StaffRepository,
   WarningRepository,
@@ -18,6 +19,7 @@ import { routeInteraction, type CommandRouterDependencies } from './commands/rou
 import { createDiscordClient } from './discord-client.js';
 import { registerCommands } from './register-commands.js';
 import { SecurityManagerService } from './security/security-manager-service.js';
+import { SecurityRecorder } from './security/security-recorder.js';
 import { GuardedMigrationService } from './setup/guarded-migration-service.js';
 import { SetupService } from './setup/setup-service.js';
 import { RoleSyncService } from './staff/role-sync-service.js';
@@ -79,11 +81,14 @@ export function createCommandRouterDependencies(input: {
   const staffProfiles = new StaffRepository(input.database);
   const managers = new SecurityManagerRepository(input.database);
   const warnings = new WarningRepository(input.database);
+  const securityLedger = new SecurityLedgerRepository(input.database);
+  const securityRecorder = new SecurityRecorder({ ledger: securityLedger, discord: input.discord });
   const moderation = {
     authorize: authorizeGuardedAction,
     staffProfiles,
     rateLimits: new RateLimitStore(input.redis),
     decisions: new PolicyDecisionRepository(input.database),
+    securityRecorder,
     correlations: new ExecutionCorrelationStore(input.redis),
     discord: input.discord,
     createCorrelationId: input.createCorrelationId,
@@ -96,8 +101,9 @@ export function createCommandRouterDependencies(input: {
       managers,
       staff: staffProfiles,
       discord: input.discord,
+      securityRecorder,
     }),
-    securityManagers: new SecurityManagerService({ guilds, managers }),
+    securityManagers: new SecurityManagerService({ guilds, managers, securityRecorder }),
     doctor: {
       checkDatabase: async () => {
         await input.database.pool.query('select 1');
@@ -124,6 +130,7 @@ export function createCommandRouterDependencies(input: {
         guilds,
         staff: staffProfiles,
         discord: input.discord,
+        securityRecorder,
         createMigrationId: input.createCorrelationId,
       }),
     },

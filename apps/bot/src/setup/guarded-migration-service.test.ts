@@ -47,6 +47,7 @@ function makeDependencies(): GuardedMigrationDependencies {
       }),
       setRolePermissions: vi.fn().mockResolvedValue(undefined),
     },
+    securityRecorder: { record: vi.fn().mockResolvedValue({ entryHash: 'ledger-hash' }) },
     createMigrationId: vi.fn(() => '11111111-1111-4111-8111-111111111111'),
   };
 }
@@ -207,6 +208,14 @@ describe('GuardedMigrationService', () => {
       GuildMode.Guarded,
       'owner',
     );
+    expect(deps.securityRecorder.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'guarded.enable',
+        actorUserId: 'owner',
+        metadata: expect.objectContaining({ migrationId: '11111111-1111-4111-8111-111111111111' }),
+      }),
+      'SECURITY',
+    );
   });
 
   it('compensates from snapshots when a Discord migration write fails before activation', async () => {
@@ -293,6 +302,10 @@ describe('GuardedMigrationService', () => {
       false,
       GuildMode.Test,
       'owner',
+    );
+    expect(deps.securityRecorder.record).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'guarded.rollback', actorUserId: 'owner' }),
+      'SECURITY',
     );
   });
 

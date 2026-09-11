@@ -29,7 +29,8 @@ function makeDependencies(action: ActionId = 'member.kick') {
       ),
     },
     rateLimits: { consume: vi.fn().mockResolvedValue({ allowed: true, windows: [] }) },
-    decisions: { record: vi.fn().mockResolvedValue(undefined) },
+    decisions: { record: vi.fn().mockResolvedValue('decision-1') },
+    securityRecorder: { record: vi.fn().mockResolvedValue({ entryHash: 'ledger-hash' }) },
     correlations: { create: vi.fn().mockResolvedValue(undefined) },
     discord: {
       getGuildState: vi.fn().mockResolvedValue({
@@ -74,6 +75,14 @@ describe('executeModerationAction', () => {
     expect(result).toMatchObject({ kind: 'DENIED', executed: false });
     expect(deps.correlations.create).not.toHaveBeenCalled();
     expect(mutation).not.toHaveBeenCalled();
+    expect(deps.securityRecorder.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'member.kick',
+        decisionId: 'decision-1',
+        metadata: expect.objectContaining({ outcome: 'DENIED' }),
+      }),
+      'MODERATION',
+    );
   });
 
   it('creates a required execution correlation before mutation', async () => {
@@ -85,6 +94,21 @@ describe('executeModerationAction', () => {
     expect(result).toMatchObject({ kind: 'EXECUTED', executed: true });
     expect(deps.correlations.create).toHaveBeenCalledTimes(1);
     expect(deps.correlations.create.mock.invocationCallOrder[0]).toBeLessThan(
+      mutation.mock.invocationCallOrder[0]!,
+    );
+    expect(deps.securityRecorder.record).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        decisionId: 'decision-1',
+        metadata: expect.objectContaining({ outcome: 'AUTHORIZED' }),
+      }),
+    );
+    expect(deps.securityRecorder.record).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ metadata: expect.objectContaining({ outcome: 'EXECUTED' }) }),
+      'MODERATION',
+    );
+    expect(deps.securityRecorder.record.mock.invocationCallOrder[0]).toBeLessThan(
       mutation.mock.invocationCallOrder[0]!,
     );
   });

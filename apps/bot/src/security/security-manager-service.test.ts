@@ -11,6 +11,7 @@ function makeDependencies() {
       grant: vi.fn().mockResolvedValue(undefined),
       revoke: vi.fn().mockResolvedValue(undefined),
     },
+    securityRecorder: { record: vi.fn().mockResolvedValue({ entryHash: 'ledger-hash' }) },
   };
 }
 
@@ -28,6 +29,16 @@ describe('SecurityManagerService', () => {
       grantedBy: '1',
     });
     expect(deps.managers.revoke).toHaveBeenCalledWith('100', '42');
+    expect(deps.securityRecorder.record).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ action: 'security.manager.add', actorUserId: '1', targetId: '42' }),
+      'SECURITY',
+    );
+    expect(deps.securityRecorder.record).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ action: 'security.manager.remove', actorUserId: '1', targetId: '42' }),
+      'SECURITY',
+    );
   });
   it('does not let a Security Manager grant themselves manager authority', async () => {
     const deps = makeDependencies();

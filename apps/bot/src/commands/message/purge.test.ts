@@ -56,7 +56,7 @@ function makeDependencies(decision: SecurityDecision = allow) {
       }),
     },
     rateLimits: { consume: vi.fn() },
-    decisions: { record: vi.fn() },
+    decisions: { record: vi.fn() }, securityRecorder: { record: vi.fn().mockResolvedValue({ entryHash: 'ledger-hash' }) },
     correlations: { create: vi.fn().mockResolvedValue(undefined) },
     createCorrelationId: vi.fn(() => 'corr-1'),
     discord: {

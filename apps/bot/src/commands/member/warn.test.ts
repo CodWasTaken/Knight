@@ -21,7 +21,7 @@ function makeDependencies(decision: SecurityDecision = allowDecision) {
   return {
     authorize: vi.fn().mockResolvedValue(decision),
     staffProfiles: { getEffectiveProfile: vi.fn().mockResolvedValue(null) },
-    rateLimits: { consume: vi.fn() }, decisions: { record: vi.fn() },
+    rateLimits: { consume: vi.fn() }, decisions: { record: vi.fn() }, securityRecorder: { record: vi.fn().mockResolvedValue({ entryHash: 'ledger-hash' }) },
     correlations: { create: vi.fn() }, createCorrelationId: vi.fn(() => 'corr-1'),
     discord: {
       getGuildState: vi.fn(), getMemberState: vi.fn(),

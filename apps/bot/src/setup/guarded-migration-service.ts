@@ -1,4 +1,5 @@
 import { GuildMode } from '@knight/contracts';
+import type { SecurityRecorder } from '../security/security-recorder.js';
 import { PermissionFlagsBits } from 'discord-api-types/v10';
 
 const GUARDED_NATIVE_PERMISSION_MASK =
@@ -87,6 +88,7 @@ export interface GuardedMigrationDependencies {
       reason: string;
     }): Promise<void>;
   };
+  securityRecorder: Pick<SecurityRecorder, 'record'>;
   createMigrationId(): string;
 }
 export class GuardedMigrationError extends Error {
@@ -260,6 +262,24 @@ export class GuardedMigrationService {
       GuildMode.Guarded,
       input.actorUserId,
     );
+    try {
+      await this.dependencies.securityRecorder.record(
+        {
+          guildId: input.guildId,
+          severity: 'HIGH',
+          source: 'SECURITY',
+          action: 'guarded.enable',
+          actorUserId: input.actorUserId,
+          targetId: migrationId,
+          decisionId: null,
+          incidentId: null,
+          metadata: { migrationId, roleCount: preview.roles.length, staffCount: preview.staffCount },
+        },
+        'SECURITY',
+      );
+    } catch {
+      // Guarded state is already durable; do not pretend activation rolled back.
+    }
   }
 
   public async rollbackBanGuard(input: { guildId: string; actorUserId: string }): Promise<void> {
@@ -296,5 +316,23 @@ export class GuardedMigrationService {
       GuildMode.Test,
       input.actorUserId,
     );
+    try {
+      await this.dependencies.securityRecorder.record(
+        {
+          guildId: input.guildId,
+          severity: 'HIGH',
+          source: 'SECURITY',
+          action: 'guarded.rollback',
+          actorUserId: input.actorUserId,
+          targetId: snapshots[0]?.migrationId ?? null,
+          decisionId: null,
+          incidentId: null,
+          metadata: { roleCount: snapshots.length },
+        },
+        'SECURITY',
+      );
+    } catch {
+      // Rollback state is already durable; do not pretend it failed.
+    }
   }
 }
