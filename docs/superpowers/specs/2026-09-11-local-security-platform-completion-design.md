@@ -1,8 +1,8 @@
 # Local Security Platform Completion Design
 
-**Date:** 2026-09-11  
-**Status:** Proposed for implementation  
-**Repository:** `CodWasTaken/Knight`  
+**Date:** 2026-09-11
+**Status:** Approved
+**Repository:** `CodWasTaken/Knight`
 **Target branch:** `feature/security-platform-completion`
 
 ## 1. Goal
@@ -210,7 +210,7 @@ When audit-log attribution is available, Knight attaches the actor and audit ent
 
 No message-content scanning, voice-event monitoring, invite monitoring, AutoMod management, or broad member-activity tracking is added in this project.
 
-The existing `Guilds`, `GuildMembers`, and `GuildModeration` intents remain sufficient for the core implementation. Message Content is added only when the owner explicitly enables selected-channel archival.
+Core moderation continues to use `Guilds`, `GuildMembers`, and `GuildModeration`; native webhook-update coverage additionally requires the non-privileged `GuildWebhooks` intent. Message Content is added only when the owner explicitly enables selected-channel archival.
 
 ## 19. Exact structural backup scope
 
@@ -221,3 +221,7 @@ Managed/integration roles are recorded for reference but never recreated or arbi
 Restore updates surviving objects by original Discord ID. Missing non-managed roles/channels may be recreated, with old-to-new ID mappings stored in restore-job metadata so dependent overwrites can be rebuilt safely.
 
 Message archives are evidence-only and are never replayed automatically.
+
+## 20. Implementation correction: webhook Gateway intent
+
+The installed Discord API types expose webhook update delivery behind `GatewayIntentBits.GuildWebhooks`. Add that non-privileged intent for the webhook-update signal described above. `MessageContent` remains disabled unless the owner explicitly enables selected-channel message archival.
