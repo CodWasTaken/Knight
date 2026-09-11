@@ -1,5 +1,4 @@
 import { GuildMode } from '@knight/contracts';
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { auth } from '../../../../auth';
 import { requireGuildAccess } from '../../../../lib/authorization';
@@ -29,9 +28,6 @@ export default async function SetupPage({
   if (services === null) {
     return (
       <main className="shell">
-        <Link className="backLink" href={`/guilds/${guildId}`}>
-          ← Guild dashboard
-        </Link>
         <section className="panel empty">
           <p className="eyebrow">Setup</p>
           <h1>Live Discord setup unavailable</h1>
@@ -52,9 +48,6 @@ export default async function SetupPage({
 
   return (
     <main className="shell">
-      <Link className="backLink" href={`/guilds/${guildId}`}>
-        ← Guild dashboard
-      </Link>
       <header className="topbar">
         <div>
           <p className="eyebrow">Persistent setup</p>

@@ -37,9 +37,6 @@ export default async function StaffProfilesPage({
 
   return (
     <main className="shell">
-      <Link className="backLink" href={`/guilds/${guildId}`}>
-        ← Guild dashboard
-      </Link>
       <header className="topbar">
         <div>
           <p className="eyebrow">Staff Profiles</p>

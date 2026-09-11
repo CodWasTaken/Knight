@@ -3,7 +3,6 @@ import {
   MODERATION_ACTION_METADATA,
   RATE_LIMITED_MODERATION_ACTIONS,
 } from '@knight/contracts';
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getWebDiscordAdapter } from '../../../../../lib/discord-runtime';
 import { getWebRuntime } from '../../../../../lib/server-runtime';
@@ -44,9 +43,6 @@ export default async function StaffProfilePage({
 
   return (
     <main className="shell">
-      <Link className="backLink" href={`/guilds/${guildId}/staff`}>
-        ← Staff Profiles
-      </Link>
       <header className="topbar">
         <div>
           <p className="eyebrow">Staff Profile</p>

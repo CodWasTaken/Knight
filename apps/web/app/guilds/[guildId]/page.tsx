@@ -7,9 +7,6 @@ export default async function GuildHome({
 
   return (
     <main className="shell">
-      <Link className="backLink" href="/">
-        ← All servers
-      </Link>
       <section className="panel">
         <p className="eyebrow">Knight Security</p>
         <h1>Guild {guildId}</h1>
