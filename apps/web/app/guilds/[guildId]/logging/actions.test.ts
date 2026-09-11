@@ -29,11 +29,12 @@ function formData(security = '', moderation = ''): FormData {
 }
 function setup() {
   const saveLoggingSettings = vi.fn().mockResolvedValue(undefined);
+  const append = vi.fn().mockResolvedValue({ entryHash: 'ledger-hash' });
   const repositories = {
     guilds: {},
     managers: {},
     staff: {},
-    securityLedger: { saveLoggingSettings },
+    securityLedger: { append, saveLoggingSettings },
   };
   const discord = {
     listTextChannels: vi.fn().mockResolvedValue([
@@ -46,7 +47,7 @@ function setup() {
   mocks.getWebRuntime.mockReturnValue({ repositories });
   mocks.getWebDiscordAdapter.mockReturnValue(discord);
   mocks.requireGuildAccess.mockResolvedValue('SECURITY_MANAGER');
-  return { repositories, discord, saveLoggingSettings };
+  return { repositories, discord, append, saveLoggingSettings };
 }
 
 describe('logging settings action', () => {
@@ -69,7 +70,7 @@ describe('logging settings action', () => {
   });
 
   it('persists validated guild channels', async () => {
-    const { discord, saveLoggingSettings } = setup();
+    const { discord, append, saveLoggingSettings } = setup();
     await saveLoggingSettingsAction(formData('security', 'moderation'));
     expect(discord.canSendToChannel).toHaveBeenCalledTimes(2);
     expect(saveLoggingSettings).toHaveBeenCalledWith({
@@ -78,6 +79,33 @@ describe('logging settings action', () => {
       moderationChannelId: 'moderation',
       updatedBy: 'session-user',
     });
+    expect(append).toHaveBeenCalledWith({
+      guildId: '100',
+      severity: 'LOW',
+      source: 'CONFIG',
+      action: 'logging.settings.update',
+      actorUserId: 'session-user',
+      targetId: '100',
+      decisionId: null,
+      incidentId: null,
+      metadata: {
+        securityChannelId: 'security',
+        moderationChannelId: 'moderation',
+      },
+    });
+    expect(saveLoggingSettings.mock.invocationCallOrder[0]).toBeLessThan(
+      append.mock.invocationCallOrder[0] ?? 0,
+    );
+  });
+
+  it('keeps a durably saved choice successful when its ledger hook fails', async () => {
+    const { append, saveLoggingSettings } = setup();
+    append.mockRejectedValue(new Error('ledger unavailable after save'));
+
+    await expect(saveLoggingSettingsAction(formData())).resolves.toBeUndefined();
+
+    expect(saveLoggingSettings).toHaveBeenCalledTimes(1);
+    expect(mocks.revalidatePath).toHaveBeenCalledWith('/guilds/100/logging');
   });
 
   it('rejects a submitted channel that is not in the guild channel list', async () => {

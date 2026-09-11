@@ -28,14 +28,13 @@ export class SecurityRecorder {
     const record = await this.dependencies.ledger.append(input);
     if (notificationKind === undefined) return record;
 
-    const settings = await this.dependencies.ledger.getLoggingSettings(input.guildId);
-    const channelId =
-      notificationKind === 'SECURITY'
-        ? settings?.securityChannelId ?? null
-        : settings?.moderationChannelId ?? null;
-    if (channelId === null) return record;
-
     try {
+      const settings = await this.dependencies.ledger.getLoggingSettings(input.guildId);
+      const channelId =
+        notificationKind === 'SECURITY'
+          ? (settings?.securityChannelId ?? null)
+          : (settings?.moderationChannelId ?? null);
+      if (channelId === null) return record;
       await this.dependencies.discord.sendChannelMessage(channelId, formatNotification(input));
     } catch {
       // Discord notifications are best-effort; the PostgreSQL ledger is authoritative.

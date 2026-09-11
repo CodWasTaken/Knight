@@ -61,13 +61,25 @@ describe('SecurityRecorder', () => {
   it('keeps the durable record when Discord notification delivery fails', async () => {
     const { recorder, ledger, sendChannelMessage } = makeRecorder(true);
 
-    await expect(recorder.record(input, 'MODERATION')).resolves.toMatchObject({ entryHash: 'hash' });
+    await expect(recorder.record(input, 'MODERATION')).resolves.toMatchObject({
+      entryHash: 'hash',
+    });
 
     expect(ledger.append).toHaveBeenCalledTimes(1);
     expect(sendChannelMessage).toHaveBeenCalledWith(
       'moderation-log',
       expect.stringContaining('member.warn'),
     );
+  });
+
+  it('keeps the durable record when notification settings cannot be read', async () => {
+    const { recorder, ledger, sendChannelMessage } = makeRecorder();
+    ledger.getLoggingSettings.mockRejectedValue(new Error('settings unavailable'));
+
+    await expect(recorder.record(input, 'SECURITY')).resolves.toMatchObject({ entryHash: 'hash' });
+
+    expect(ledger.append).toHaveBeenCalledTimes(1);
+    expect(sendChannelMessage).not.toHaveBeenCalled();
   });
 
   it('writes ledger-only entries without reading notification settings', async () => {

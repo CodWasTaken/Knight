@@ -56,6 +56,21 @@ export async function saveLoggingSettingsAction(formData: FormData): Promise<voi
     moderationChannelId,
     updatedBy: session.user.id,
   });
+  try {
+    await runtime.repositories.securityLedger.append({
+      guildId,
+      severity: 'LOW',
+      source: 'CONFIG',
+      action: 'logging.settings.update',
+      actorUserId: session.user.id,
+      targetId: guildId,
+      decisionId: null,
+      incidentId: null,
+      metadata: { securityChannelId, moderationChannelId },
+    });
+  } catch {
+    // Settings are already durable; do not pretend they rolled back if recording fails.
+  }
   revalidatePath(`/guilds/${guildId}/logging`);
   revalidatePath(`/guilds/${guildId}/setup`);
 }
