@@ -1,3 +1,4 @@
+import { ChannelType } from 'discord.js';
 import { describe, expect, it, vi } from 'vitest';
 import { DiscordJsAdapter } from './discord-js-adapter.js';
 
@@ -30,11 +31,22 @@ function makeAdapter() {
       },
     ],
   ]);
+  const logSend = vi.fn().mockResolvedValue(undefined);
+  const logChannel = {
+    id: 'log-1', name: 'security-log', type: ChannelType.GuildText,
+    isTextBased: () => true, send: logSend,
+    permissionsFor: vi.fn().mockReturnValue({ has: vi.fn().mockReturnValue(true) }),
+  };
+  const blockedChannel = {
+    id: 'blocked-1', name: 'blocked-log', type: ChannelType.GuildText,
+    isTextBased: () => true, send: vi.fn(),
+    permissionsFor: vi.fn().mockReturnValue({ has: vi.fn().mockReturnValue(false) }),
+  };
+  const voiceChannel = { id: 'voice-1', name: 'voice', type: ChannelType.GuildVoice };
+  const guildChannels = new Map([[logChannel.id, logChannel], [blockedChannel.id, blockedChannel], [voiceChannel.id, voiceChannel]]);
   const guild = {
-    id: '100',
-    ownerId: 'owner',
-    members,
-    roles: { fetch: vi.fn().mockResolvedValue(roles) },
+    id: '100', ownerId: 'owner', members, roles: { fetch: vi.fn().mockResolvedValue(roles) },
+    channels: { fetch: vi.fn().mockImplementation(async (id?: string) => id ? guildChannels.get(id) ?? null : guildChannels) },
   };
   const send = vi.fn().mockResolvedValue(undefined);
   const messages = new Map([
@@ -49,9 +61,9 @@ function makeAdapter() {
   const client = {
     guilds: { fetch: vi.fn().mockResolvedValue(guild) },
     users: { fetch: vi.fn().mockResolvedValue({ send }) },
-    channels: { fetch: vi.fn().mockResolvedValue(channel) },
+    channels: { fetch: vi.fn().mockImplementation(async (id: string) => id === 'log-1' ? logChannel : channel) },
   };
-  return { adapter: new DiscordJsAdapter(client as never), members, member, send, channel };
+  return { adapter: new DiscordJsAdapter(client as never), members, member, send, channel, logChannel, logSend };
 }
 
 describe('DiscordJsAdapter moderation operations', () => {
@@ -84,6 +96,25 @@ describe('DiscordJsAdapter moderation operations', () => {
     expect(channel.messages.fetch).toHaveBeenCalledWith({ limit: 5 });
     expect(await adapter.deleteMessages({ channelId: 'channel-1', messageIds: ['m1'] })).toBe(1);
     expect(channel.bulkDelete).toHaveBeenCalledWith(['m1'], true);
+  });
+
+
+  it('lists only supported guild notification channels and checks send permissions', async () => {
+    const { adapter } = makeAdapter();
+
+    expect(await adapter.listTextChannels('100')).toEqual([
+      { channelId: 'log-1', name: 'security-log' },
+      { channelId: 'blocked-1', name: 'blocked-log' },
+    ]);
+    expect(await adapter.canSendToChannel('100', 'log-1')).toBe(true);
+    expect(await adapter.canSendToChannel('100', 'blocked-1')).toBe(false);
+    expect(await adapter.canSendToChannel('100', 'missing')).toBe(false);
+  });
+
+  it('sends notification text through an existing text channel', async () => {
+    const { adapter, logSend } = makeAdapter();
+    await adapter.sendChannelMessage('log-1', 'Knight security event');
+    expect(logSend).toHaveBeenCalledWith('Knight security event');
   });
 
   it('exposes Discord role names and managed state', async () => {

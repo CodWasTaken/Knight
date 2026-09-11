@@ -1,9 +1,10 @@
-import type { Client, Guild } from 'discord.js';
+import { ChannelType, PermissionFlagsBits, type Client, type Guild } from 'discord.js';
 import type {
   DiscordActionPort,
   DiscordGuildState,
   DiscordMemberState,
   DiscordMessageState,
+  DiscordTextChannelState,
 } from './port.js';
 
 const UNKNOWN_MEMBER_ERROR_CODE = 10_007;
@@ -61,6 +62,39 @@ export class DiscordJsAdapter implements DiscordActionPort {
   public async sendDirectMessage(input: { userId: string; content: string }): Promise<void> {
     const user = await this.client.users.fetch(input.userId);
     await user.send(input.content);
+  }
+
+  public async listTextChannels(guildId: string): Promise<readonly DiscordTextChannelState[]> {
+    const guild = await this.fetchGuild(guildId);
+    const channels = await guild.channels.fetch();
+    return [...channels.values()]
+      .filter((channel) =>
+        channel !== null &&
+        (channel.type === ChannelType.GuildText || channel.type === ChannelType.GuildAnnouncement),
+      )
+      .map((channel) => ({ channelId: channel.id, name: channel.name }));
+  }
+
+  public async canSendToChannel(guildId: string, channelId: string): Promise<boolean> {
+    const guild = await this.fetchGuild(guildId);
+    const channel = await guild.channels.fetch(channelId);
+    if (
+      channel === null ||
+      (channel.type !== ChannelType.GuildText && channel.type !== ChannelType.GuildAnnouncement)
+    ) {
+      return false;
+    }
+    const knight = await guild.members.fetchMe();
+    const permissions = channel.permissionsFor(knight);
+    return permissions?.has([PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages]) ?? false;
+  }
+
+  public async sendChannelMessage(channelId: string, content: string): Promise<void> {
+    const channel = await this.client.channels.fetch(channelId);
+    if (channel === null || !channel.isTextBased() || !('send' in channel)) {
+      throw new Error(`Discord channel ${channelId} cannot receive text notifications`);
+    }
+    await channel.send(content);
   }
 
   public async fetchRecentMessages(input: {

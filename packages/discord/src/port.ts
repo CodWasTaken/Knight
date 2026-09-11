@@ -14,6 +14,11 @@ export type DiscordRoleState = Readonly<{
   permissions: bigint;
 }>;
 
+export type DiscordTextChannelState = Readonly<{
+  channelId: string;
+  name: string;
+}>;
+
 export type DiscordMessageState = Readonly<{
   messageId: string;
   authorUserId: string;
@@ -41,6 +46,9 @@ export interface DiscordActionPort {
   }): Promise<void>;
   unbanMember(input: { guildId: string; targetUserId: string; reason: string }): Promise<void>;
   sendDirectMessage(input: { userId: string; content: string }): Promise<void>;
+  listTextChannels(guildId: string): Promise<readonly DiscordTextChannelState[]>;
+  canSendToChannel(guildId: string, channelId: string): Promise<boolean>;
+  sendChannelMessage(channelId: string, content: string): Promise<void>;
   fetchRecentMessages(input: {
     channelId: string;
     limit: number;
