@@ -30,7 +30,7 @@ function context(overrides: Partial<AuthorizationContext> = {}): AuthorizationCo
       elevatedUnregistered: false,
       protectionLevel: ProtectionLevel.Normal,
     },
-    emergency: { memberModerationLocked: false },
+    emergency: { mode: 'NORMAL', lockedScopes: [] },
     ...overrides,
   };
 }
@@ -115,7 +115,7 @@ describe('evaluatePolicy', () => {
     );
   });
 
-  it('denies resource-scoped purge while the emergency member lock is active', () => {
+  it('denies resource-scoped purge while member moderation is locked down', () => {
     expectDecision(
       context({
         action: 'message.purge',
@@ -124,18 +124,93 @@ describe('evaluatePolicy', () => {
           profile: { ...moderator, permissions: ['message.purge'] },
         },
         target: null,
-        emergency: { memberModerationLocked: true },
+        emergency: { mode: 'LOCKDOWN', lockedScopes: ['MEMBER_MODERATION'] },
       }),
       PolicyDecision.Deny,
       'LOCKDOWN_ACTIVE',
     );
   });
 
-  it('denies member moderation while the emergency member lock is active', () => {
+  it('denies member moderation while member moderation is locked down', () => {
     expectDecision(
-      context({ emergency: { memberModerationLocked: true } }),
+      context({ emergency: { mode: 'LOCKDOWN', lockedScopes: ['MEMBER_MODERATION'] } }),
       PolicyDecision.Deny,
       'LOCKDOWN_ACTIVE',
+    );
+  });
+
+  it.each([
+    'security.staff.assign',
+    'security.staff.remove',
+    'security.staff.manage_profiles',
+    'security.security_managers.manage',
+    'security.policy.edit',
+  ] as const)('denies %s while security configuration is locked down', (action) => {
+    expectDecision(
+      context({
+        action,
+        actor: {
+          ...context().actor,
+          profile: { ...moderator, permissions: [action] },
+        },
+        target: null,
+        emergency: { mode: 'LOCKDOWN', lockedScopes: ['SECURITY_CONFIG'] },
+      }),
+      PolicyDecision.Deny,
+      'LOCKDOWN_ACTIVE',
+    );
+  });
+
+  it('denies privileged actions when the full scope is locked down', () => {
+    expectDecision(
+      context({ emergency: { mode: 'LOCKDOWN', lockedScopes: ['FULL'] } }),
+      PolicyDecision.Deny,
+      'LOCKDOWN_ACTIVE',
+    );
+  });
+
+  it.each([
+    'member.warn',
+    'member.timeout',
+    'member.kick',
+    'member.ban',
+    'member.unban',
+    'message.purge',
+    'security.staff.assign',
+    'security.staff.remove',
+    'security.staff.manage_profiles',
+    'security.security_managers.manage',
+    'security.policy.edit',
+    'security.approvals.approve',
+  ] as const)('denies mutating action %s during panic', (action) => {
+    expectDecision(
+      context({
+        action,
+        actor: {
+          ...context().actor,
+          profile: { ...moderator, permissions: [action] },
+        },
+        target: action.startsWith('member.') ? context().target : null,
+        emergency: { mode: 'PANIC', lockedScopes: [] },
+      }),
+      PolicyDecision.Deny,
+      'PANIC_ACTIVE',
+    );
+  });
+
+  it('keeps read-only policy access available during panic', () => {
+    expectDecision(
+      context({
+        action: 'security.policy.view',
+        actor: {
+          ...context().actor,
+          profile: { ...moderator, permissions: ['security.policy.view'] },
+        },
+        target: null,
+        emergency: { mode: 'PANIC', lockedScopes: [] },
+      }),
+      PolicyDecision.Allow,
+      'ALLOWED',
     );
   });
 

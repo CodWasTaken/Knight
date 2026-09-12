@@ -24,7 +24,7 @@ const ELEVATED_DISCORD_PERMISSION_MASK = [
 
 export type ModerationStaffStateDependencies = Readonly<{
   staffProfiles: Pick<StaffRepository, 'getEffectiveProfile'>;
-  security: Pick<SecurityRepository, 'getProtectionLevel'>;
+  security: Pick<SecurityRepository, 'getProtectionLevel' | 'getSecurityState'>;
   discord: Pick<DiscordActionPort, 'getGuildState' | 'getMemberState'>;
 }>;
 
@@ -54,11 +54,11 @@ export function createModerationStaffStatePort(
 ): StaffStatePort {
   return {
     async getContext(request) {
-      const guild = await dependencies.discord.getGuildState(request.guildId);
-      const actorProfileRecord = await dependencies.staffProfiles.getEffectiveProfile(
-        request.guildId,
-        request.actorUserId,
-      );
+      const [guild, actorProfileRecord, securityState] = await Promise.all([
+        dependencies.discord.getGuildState(request.guildId),
+        dependencies.staffProfiles.getEffectiveProfile(request.guildId, request.actorUserId),
+        dependencies.security.getSecurityState(request.guildId),
+      ]);
       const [targetProfileRecord, targetDiscord, targetProtectionLevel] =
         request.targetId === null
           ? [null, null, ProtectionLevel.Normal]
@@ -98,7 +98,10 @@ export function createModerationStaffStatePort(
           temporaryRestrictions: [],
         },
         target,
-        emergency: { memberModerationLocked: false },
+        emergency: {
+          mode: securityState.mode,
+          lockedScopes: securityState.lockedScopes,
+        },
         actionPolicy,
       };
     },

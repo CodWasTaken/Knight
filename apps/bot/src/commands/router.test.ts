@@ -23,7 +23,10 @@ function makeModerationDependencies(decision: SecurityDecision = denied) {
   return {
     authorize: vi.fn().mockResolvedValue(decision),
     staffProfiles: { getEffectiveProfile: vi.fn().mockResolvedValue(null) },
-    security: { getProtectionLevel: vi.fn().mockResolvedValue(ProtectionLevel.Normal) },
+    security: {
+      getProtectionLevel: vi.fn().mockResolvedValue(ProtectionLevel.Normal),
+      getSecurityState: vi.fn().mockResolvedValue({ mode: 'NORMAL', lockedScopes: [] }),
+    },
     rateLimits: { consume: vi.fn() },
     decisions: { record: vi.fn() },
     securityRecorder: { record: vi.fn().mockResolvedValue({ entryHash: 'ledger-hash' }) },

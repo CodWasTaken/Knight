@@ -24,7 +24,7 @@ function context(overrides: Partial<AuthorizationContext> = {}): AuthorizationCo
       temporaryRestrictions: [],
     },
     target: null,
-    emergency: { memberModerationLocked: false },
+    emergency: { mode: 'NORMAL', lockedScopes: [] },
     ...overrides,
   };
 }

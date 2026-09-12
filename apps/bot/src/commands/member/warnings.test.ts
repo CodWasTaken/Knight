@@ -40,7 +40,10 @@ function makeDependencies(actorPermissions: readonly ActionId[] = ['member.warni
         userId === '42' ? actor : userId === '77' ? target : null,
       ),
     },
-    security: { getProtectionLevel: vi.fn().mockResolvedValue(ProtectionLevel.Normal) },
+    security: {
+      getProtectionLevel: vi.fn().mockResolvedValue(ProtectionLevel.Normal),
+      getSecurityState: vi.fn().mockResolvedValue({ mode: 'NORMAL', lockedScopes: [] }),
+    },
     discord: {
       getGuildState: vi.fn().mockResolvedValue({
         guildId: '100',

@@ -32,7 +32,10 @@ function deps(ownerId = '1') {
         u === '42' ? profile('actor', 10) : u === '77' ? profile('target', 20) : null,
       ),
     },
-    security: { getProtectionLevel: vi.fn().mockResolvedValue(ProtectionLevel.Normal) },
+    security: {
+      getProtectionLevel: vi.fn().mockResolvedValue(ProtectionLevel.Normal),
+      getSecurityState: vi.fn().mockResolvedValue({ mode: 'NORMAL', lockedScopes: [] }),
+    },
     rateLimits: { consume: vi.fn().mockResolvedValue({ allowed: true, windows: [] }) },
     decisions: { record: vi.fn().mockResolvedValue(undefined) },
     securityRecorder: { record: vi.fn().mockResolvedValue({ entryHash: 'ledger-hash' }) },

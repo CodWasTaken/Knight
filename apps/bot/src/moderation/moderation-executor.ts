@@ -27,7 +27,7 @@ export type ModerationExecutionInput = Readonly<{
 export type ModerationExecutorDependencies = Readonly<{
   authorize: typeof authorizeGuardedAction;
   staffProfiles: Pick<StaffRepository, 'getEffectiveProfile'>;
-  security: Pick<SecurityRepository, 'getProtectionLevel'>;
+  security: Pick<SecurityRepository, 'getProtectionLevel' | 'getSecurityState'>;
   rateLimits: RateLimitPort;
   decisions: DecisionLogPort;
   securityRecorder: Pick<SecurityRecorder, 'record'>;

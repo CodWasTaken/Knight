@@ -1,8 +1,14 @@
-import { PolicyDecision, ProtectionLevel, type SecurityDecision } from '@knight/contracts';
+import {
+  PolicyDecision,
+  ProtectionLevel,
+  type ActionId,
+  type SecurityDecision,
+  type SecurityLockdownScope,
+} from '@knight/contracts';
 import { getEffectiveAccess } from './effective-access.js';
 import type { AuthorizationContext } from './types.js';
 
-const MEMBER_MODERATION_ACTIONS = new Set([
+const MEMBER_MODERATION_ACTIONS = new Set<ActionId>([
   'member.warn',
   'member.timeout',
   'member.kick',
@@ -10,6 +16,51 @@ const MEMBER_MODERATION_ACTIONS = new Set([
   'member.unban',
   'message.purge',
 ]);
+
+const SECURITY_CONFIG_ACTIONS = new Set<ActionId>([
+  'security.staff.assign',
+  'security.staff.remove',
+  'security.staff.manage_profiles',
+  'security.security_managers.manage',
+  'security.policy.edit',
+  'security.approvals.approve',
+]);
+
+const MUTATING_ACTIONS = new Set<ActionId>([
+  ...MEMBER_MODERATION_ACTIONS,
+  ...SECURITY_CONFIG_ACTIONS,
+]);
+
+const ACTIONS_BY_LOCKDOWN_SCOPE: Readonly<
+  Partial<Record<SecurityLockdownScope, ReadonlySet<ActionId>>>
+> = {
+  MEMBER_MODERATION: MEMBER_MODERATION_ACTIONS,
+  SECURITY_CONFIG: SECURITY_CONFIG_ACTIONS,
+  FULL: MUTATING_ACTIONS,
+};
+
+function lockedByEmergencyState(context: AuthorizationContext): SecurityDecision | null {
+  if (context.emergency.mode === 'PANIC' && MUTATING_ACTIONS.has(context.action)) {
+    return makeDecision(
+      context,
+      PolicyDecision.Deny,
+      'PANIC_ACTIVE',
+      'Panic mode blocks privileged Knight mutations until it is cleared.',
+    );
+  }
+  if (context.emergency.mode !== 'LOCKDOWN') return null;
+  const blocked = context.emergency.lockedScopes.some((scope) =>
+    ACTIONS_BY_LOCKDOWN_SCOPE[scope]?.has(context.action),
+  );
+  return blocked
+    ? makeDecision(
+        context,
+        PolicyDecision.Deny,
+        'LOCKDOWN_ACTIVE',
+        'The current Lockdown scope blocks this Knight action.',
+      )
+    : null;
+}
 
 function makeDecision(
   context: AuthorizationContext,
@@ -45,14 +96,8 @@ export function evaluatePolicy(context: AuthorizationContext): SecurityDecision 
     );
   }
 
-  if (context.emergency.memberModerationLocked && MEMBER_MODERATION_ACTIONS.has(context.action)) {
-    return makeDecision(
-      context,
-      PolicyDecision.Deny,
-      'LOCKDOWN_ACTIVE',
-      'Member moderation is locked by the current emergency security state.',
-    );
-  }
+  const emergencyDecision = lockedByEmergencyState(context);
+  if (emergencyDecision) return emergencyDecision;
   const access = getEffectiveAccess(context.actor, context.action);
 
   if (access.restricted) {

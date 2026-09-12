@@ -38,7 +38,10 @@ function makeDependencies(decision: SecurityDecision = allowDecision) {
     staffProfiles: {
       getEffectiveProfile: vi.fn().mockResolvedValue(null),
     },
-    security: { getProtectionLevel: vi.fn().mockResolvedValue(ProtectionLevel.Normal) },
+    security: {
+      getProtectionLevel: vi.fn().mockResolvedValue(ProtectionLevel.Normal),
+      getSecurityState: vi.fn().mockResolvedValue({ mode: 'NORMAL', lockedScopes: [] }),
+    },
     rateLimits: {
       consume: vi.fn(),
     },

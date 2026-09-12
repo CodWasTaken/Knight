@@ -28,7 +28,10 @@ function makeDependencies(action: ActionId = 'member.kick') {
         userId === '42' ? actor : null,
       ),
     },
-    security: { getProtectionLevel: vi.fn().mockResolvedValue(ProtectionLevel.Normal) },
+    security: {
+      getProtectionLevel: vi.fn().mockResolvedValue(ProtectionLevel.Normal),
+      getSecurityState: vi.fn().mockResolvedValue({ mode: 'NORMAL', lockedScopes: [] }),
+    },
     rateLimits: { consume: vi.fn().mockResolvedValue({ allowed: true, windows: [] }) },
     decisions: { record: vi.fn().mockResolvedValue('decision-1') },
     securityRecorder: { record: vi.fn().mockResolvedValue({ entryHash: 'ledger-hash' }) },

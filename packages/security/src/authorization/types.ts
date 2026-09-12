@@ -1,4 +1,10 @@
-import type { ActionId, ProtectionLevel, StaffProfileSnapshot } from '@knight/contracts';
+import type {
+  ActionId,
+  ProtectionLevel,
+  SecurityLockdownScope,
+  SecurityStateMode,
+  StaffProfileSnapshot,
+} from '@knight/contracts';
 
 export type AuthorizationActor = Readonly<{
   userId: string;
@@ -17,7 +23,8 @@ export type AuthorizationTarget = Readonly<{
 }>;
 
 export type AuthorizationEmergencyState = Readonly<{
-  memberModerationLocked: boolean;
+  mode: SecurityStateMode;
+  lockedScopes: readonly SecurityLockdownScope[];
 }>;
 export type AuthorizationContext = Readonly<{
   action: ActionId;

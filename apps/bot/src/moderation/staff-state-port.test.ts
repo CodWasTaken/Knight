@@ -5,9 +5,17 @@ import { createModerationStaffStatePort } from './staff-state-port.js';
 describe('moderation staff state', () => {
   it('loads the persisted protection level for a member target', async () => {
     const getProtectionLevel = vi.fn().mockResolvedValue(ProtectionLevel.Critical);
+    const getSecurityState = vi.fn().mockResolvedValue({
+      guildId: '100',
+      mode: 'LOCKDOWN',
+      lockedScopes: ['MEMBER_MODERATION'],
+      reason: 'Investigation',
+      updatedBy: 'owner',
+      updatedAt: new Date(),
+    });
     const port = createModerationStaffStatePort({
       staffProfiles: { getEffectiveProfile: vi.fn().mockResolvedValue(null) },
-      security: { getProtectionLevel },
+      security: { getProtectionLevel, getSecurityState },
       discord: {
         getGuildState: vi.fn().mockResolvedValue({
           guildId: '100',
@@ -37,5 +45,10 @@ describe('moderation staff state', () => {
 
     expect(getProtectionLevel).toHaveBeenCalledWith('100', 'USER', 'target');
     expect(context.target?.protectionLevel).toBe(ProtectionLevel.Critical);
+    expect(getSecurityState).toHaveBeenCalledWith('100');
+    expect(context.emergency).toEqual({
+      mode: 'LOCKDOWN',
+      lockedScopes: ['MEMBER_MODERATION'],
+    });
   });
 });

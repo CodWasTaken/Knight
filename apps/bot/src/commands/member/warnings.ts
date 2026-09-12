@@ -16,7 +16,7 @@ export type MemberWarningsCommandInput = Readonly<{
 
 export type MemberWarningsCommandDependencies = Readonly<{
   staffProfiles: Pick<StaffRepository, 'getEffectiveProfile'>;
-  security: Pick<SecurityRepository, 'getProtectionLevel'>;
+  security: Pick<SecurityRepository, 'getProtectionLevel' | 'getSecurityState'>;
   discord: Pick<DiscordActionPort, 'getGuildState' | 'getMemberState'>;
   warnings: Pick<WarningRepository, 'listForUser'>;
 }>;

@@ -41,7 +41,7 @@ const baseContext: GuardedActionContext = {
     elevatedUnregistered: false,
     protectionLevel: ProtectionLevel.Normal,
   },
-  emergency: { memberModerationLocked: false },
+  emergency: { mode: 'NORMAL', lockedScopes: [] },
   actionPolicy: {
     enabled: true,
     unlimited: false,
