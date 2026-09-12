@@ -1,4 +1,4 @@
-import type { ProtectionLevel } from '@knight/contracts';
+import type { ProtectionLevel, SecurityLockdownScope, SecurityStateMode } from '@knight/contracts';
 import { sql } from 'drizzle-orm';
 import {
   check,
@@ -113,6 +113,23 @@ export const guildFirewallSettings = pgTable(
       'guild_firewall_webhook_mode_check',
       sql`${table.webhookMode} in ('OBSERVE', 'ALERT', 'ENFORCE')`,
     ),
+  ],
+);
+
+export const guildSecurityState = pgTable(
+  'guild_security_state',
+  {
+    guildId: text('guild_id')
+      .primaryKey()
+      .references(() => guilds.id, { onDelete: 'cascade' }),
+    mode: text('mode').$type<SecurityStateMode>().notNull().default('NORMAL'),
+    lockedScopes: jsonb('locked_scopes').$type<SecurityLockdownScope[]>().notNull().default([]),
+    reason: text('reason').notNull(),
+    updatedBy: text('updated_by').notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    check('guild_security_state_mode_check', sql`${table.mode} in ('NORMAL', 'LOCKDOWN', 'PANIC')`),
   ],
 );
 

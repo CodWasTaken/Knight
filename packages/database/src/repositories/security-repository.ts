@@ -1,8 +1,13 @@
-import { ProtectionLevel } from '@knight/contracts';
+import {
+  ProtectionLevel,
+  type SecurityLockdownScope,
+  type SecurityStateMode,
+} from '@knight/contracts';
 import { and, asc, desc, eq, gte, lte, sql } from 'drizzle-orm';
 import type { Database } from '../client.js';
 import {
   guildFirewallSettings,
+  guildSecurityState,
   guilds,
   knownBots,
   knownWebhooks,
@@ -25,6 +30,14 @@ export type FirewallSettingsView = Readonly<{
   botMode: FirewallMode;
   webhookMode: FirewallMode;
   configured: boolean;
+  updatedBy: string | null;
+  updatedAt: Date | null;
+}>;
+export type SecurityStateView = Readonly<{
+  guildId: string;
+  mode: SecurityStateMode;
+  lockedScopes: readonly SecurityLockdownScope[];
+  reason: string | null;
   updatedBy: string | null;
   updatedAt: Date | null;
 }>;
@@ -246,6 +259,51 @@ export class SecurityRepository {
       webhookMode: settings.webhookMode as FirewallMode,
       configured: true,
     };
+  }
+
+  public async getSecurityState(guildId: string): Promise<SecurityStateView> {
+    const [state] = await this.database.db
+      .select()
+      .from(guildSecurityState)
+      .where(eq(guildSecurityState.guildId, guildId))
+      .limit(1);
+    if (!state) {
+      return {
+        guildId,
+        mode: 'NORMAL',
+        lockedScopes: [],
+        reason: null,
+        updatedBy: null,
+        updatedAt: null,
+      };
+    }
+    return state;
+  }
+
+  public async setSecurityState(input: {
+    guildId: string;
+    mode: SecurityStateMode;
+    lockedScopes: readonly SecurityLockdownScope[];
+    reason: string;
+    updatedBy: string;
+  }): Promise<SecurityStateView> {
+    const lockedScopes = input.mode === 'LOCKDOWN' ? [...new Set(input.lockedScopes)] : [];
+    const [state] = await this.database.db
+      .insert(guildSecurityState)
+      .values({ ...input, lockedScopes })
+      .onConflictDoUpdate({
+        target: guildSecurityState.guildId,
+        set: {
+          mode: input.mode,
+          lockedScopes,
+          reason: input.reason,
+          updatedBy: input.updatedBy,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    if (!state) throw new Error('Failed to persist guild security state');
+    return state;
   }
 
   public async upsertBotInventory(input: {

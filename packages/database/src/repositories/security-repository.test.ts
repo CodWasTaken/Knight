@@ -187,4 +187,42 @@ describe('security persistence', () => {
       expect.objectContaining({ resourceType: 'USER', resourceId: '42' }),
     ]);
   });
+
+  it('stores one complete guild emergency state and defaults to Normal', async () => {
+    expect(await security.getSecurityState('g1')).toMatchObject({
+      guildId: 'g1',
+      mode: 'NORMAL',
+      lockedScopes: [],
+      reason: null,
+      updatedBy: null,
+    });
+
+    await security.setSecurityState({
+      guildId: 'g1',
+      mode: 'LOCKDOWN',
+      lockedScopes: ['MEMBER_MODERATION', 'SECURITY_CONFIG'],
+      reason: 'Investigating account access',
+      updatedBy: 'owner-1',
+    });
+    expect(await security.getSecurityState('g1')).toMatchObject({
+      mode: 'LOCKDOWN',
+      lockedScopes: ['MEMBER_MODERATION', 'SECURITY_CONFIG'],
+      reason: 'Investigating account access',
+    });
+    expect(await security.getSecurityState('g2')).toMatchObject({ mode: 'NORMAL' });
+
+    await security.setSecurityState({
+      guildId: 'g1',
+      mode: 'PANIC',
+      lockedScopes: ['ROLES'],
+      reason: 'Confirmed compromise',
+      updatedBy: 'manager-1',
+    });
+    expect(await security.getSecurityState('g1')).toMatchObject({
+      mode: 'PANIC',
+      lockedScopes: [],
+      reason: 'Confirmed compromise',
+      updatedBy: 'manager-1',
+    });
+  });
 });
