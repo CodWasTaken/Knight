@@ -1,30 +1,47 @@
-import { PolicyDecision, type SecurityDecision } from '@knight/contracts';
+import { PolicyDecision, ProtectionLevel, type SecurityDecision } from '@knight/contracts';
 import { describe, expect, it, vi } from 'vitest';
 import { executeMemberWarn } from './warn.js';
 
 const input = {
-  guildId: '100', actorUserId: '42', targetUserId: '77', knightBotUserId: '999',
-  reason: 'Repeated spam', nowMs: 10_000,
+  guildId: '100',
+  actorUserId: '42',
+  targetUserId: '77',
+  knightBotUserId: '999',
+  reason: 'Repeated spam',
+  nowMs: 10_000,
 } as const;
 
 const allowDecision: SecurityDecision = {
-  decision: PolicyDecision.Allow, code: 'ALLOWED', reason: 'Allowed.',
-  policyVersionId: 'version-actor', metadata: {},
+  decision: PolicyDecision.Allow,
+  code: 'ALLOWED',
+  reason: 'Allowed.',
+  policyVersionId: 'version-actor',
+  metadata: {},
 };
 
 function makeDependencies(decision: SecurityDecision = allowDecision) {
   const warning = {
-    id: 'warning-1', guildId: '100', targetUserId: '77', actorUserId: '42',
-    reason: 'Repeated spam', actorProfileVersionId: 'version-actor',
-    dmDeliveryStatus: 'PENDING', createdAt: new Date('2026-09-10T20:00:00Z'),
+    id: 'warning-1',
+    guildId: '100',
+    targetUserId: '77',
+    actorUserId: '42',
+    reason: 'Repeated spam',
+    actorProfileVersionId: 'version-actor',
+    dmDeliveryStatus: 'PENDING',
+    createdAt: new Date('2026-09-10T20:00:00Z'),
   };
   return {
     authorize: vi.fn().mockResolvedValue(decision),
     staffProfiles: { getEffectiveProfile: vi.fn().mockResolvedValue(null) },
-    rateLimits: { consume: vi.fn() }, decisions: { record: vi.fn() }, securityRecorder: { record: vi.fn().mockResolvedValue({ entryHash: 'ledger-hash' }) },
-    correlations: { create: vi.fn() }, createCorrelationId: vi.fn(() => 'corr-1'),
+    security: { getProtectionLevel: vi.fn().mockResolvedValue(ProtectionLevel.Normal) },
+    rateLimits: { consume: vi.fn() },
+    decisions: { record: vi.fn() },
+    securityRecorder: { record: vi.fn().mockResolvedValue({ entryHash: 'ledger-hash' }) },
+    correlations: { create: vi.fn() },
+    createCorrelationId: vi.fn(() => 'corr-1'),
     discord: {
-      getGuildState: vi.fn(), getMemberState: vi.fn(),
+      getGuildState: vi.fn(),
+      getMemberState: vi.fn(),
       sendDirectMessage: vi.fn().mockResolvedValue(undefined),
     },
     warnings: {
@@ -40,7 +57,12 @@ describe('executeMemberWarn', () => {
     ['TARGET_OUTRANKS_ACTOR', 'protected'],
     ['RATE_LIMIT_EXCEEDED', 'rate limit'],
   ])('does not persist or DM when denied with %s', async (code, expected) => {
-    const deps = makeDependencies({ ...allowDecision, decision: PolicyDecision.Deny, code, reason: 'Denied.' });
+    const deps = makeDependencies({
+      ...allowDecision,
+      decision: PolicyDecision.Deny,
+      code,
+      reason: 'Denied.',
+    });
     const result = await executeMemberWarn(input, deps);
     expect(result.executed).toBe(false);
     expect(result.content.toLowerCase()).toContain(expected.toLowerCase());
@@ -54,12 +76,16 @@ describe('executeMemberWarn', () => {
 
     expect(result.executed).toBe(true);
     expect(deps.warnings.create).toHaveBeenCalledWith({
-      guildId: '100', targetUserId: '77', actorUserId: '42', reason: 'Repeated spam',
+      guildId: '100',
+      targetUserId: '77',
+      actorUserId: '42',
+      reason: 'Repeated spam',
       actorProfileVersionId: 'version-actor',
     });
     expect(deps.correlations.create).not.toHaveBeenCalled();
     expect(deps.discord.sendDirectMessage).toHaveBeenCalledWith({
-      userId: '77', content: expect.stringContaining('Repeated spam'),
+      userId: '77',
+      content: expect.stringContaining('Repeated spam'),
     });
     expect(deps.warnings.setDmDeliveryStatus).toHaveBeenCalledWith('100', 'warning-1', 'DELIVERED');
     expect(deps.warnings.create.mock.invocationCallOrder[0]).toBeLessThan(

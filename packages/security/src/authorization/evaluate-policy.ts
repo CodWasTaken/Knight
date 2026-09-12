@@ -98,6 +98,19 @@ export function evaluatePolicy(context: AuthorizationContext): SecurityDecision 
   }
 
   if (
+    !context.actor.isGuildOwner &&
+    context.target?.protectionLevel === ProtectionLevel.Immutable
+  ) {
+    return makeDecision(
+      context,
+      PolicyDecision.Deny,
+      'PROTECTED_TARGET',
+      'This immutable target cannot be changed by ordinary staff actions.',
+      { protectionLevel: context.target.protectionLevel },
+    );
+  }
+
+  if (
     context.target !== null &&
     (context.target.protectionLevel === ProtectionLevel.Critical ||
       context.target.protectionLevel === ProtectionLevel.Immutable)

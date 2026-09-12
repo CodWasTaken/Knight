@@ -1,6 +1,6 @@
 import type { ActionId, SecurityDecision } from '@knight/contracts';
 import { PolicyDecision } from '@knight/contracts';
-import type { StaffRepository } from '@knight/database';
+import type { SecurityRepository, StaffRepository } from '@knight/database';
 import type { DiscordActionPort } from '@knight/discord';
 import type { ExecutionCorrelationStore } from '@knight/redis';
 import type {
@@ -27,6 +27,7 @@ export type ModerationExecutionInput = Readonly<{
 export type ModerationExecutorDependencies = Readonly<{
   authorize: typeof authorizeGuardedAction;
   staffProfiles: Pick<StaffRepository, 'getEffectiveProfile'>;
+  security: Pick<SecurityRepository, 'getProtectionLevel'>;
   rateLimits: RateLimitPort;
   decisions: DecisionLogPort;
   securityRecorder: Pick<SecurityRecorder, 'record'>;

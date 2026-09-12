@@ -1,6 +1,7 @@
 import type { ActionPolicy, StaffProfileSnapshot } from '@knight/contracts';
 import { ProtectionLevel } from '@knight/contracts';
 import type { StaffProfileVersionRecord, StaffRepository } from '@knight/database';
+import type { SecurityRepository } from '@knight/database';
 import type { DiscordActionPort } from '@knight/discord';
 import type { StaffStatePort } from '@knight/security';
 import { PermissionsBitField } from 'discord.js';
@@ -23,6 +24,7 @@ const ELEVATED_DISCORD_PERMISSION_MASK = [
 
 export type ModerationStaffStateDependencies = Readonly<{
   staffProfiles: Pick<StaffRepository, 'getEffectiveProfile'>;
+  security: Pick<SecurityRepository, 'getProtectionLevel'>;
   discord: Pick<DiscordActionPort, 'getGuildState' | 'getMemberState'>;
 }>;
 
@@ -57,12 +59,13 @@ export function createModerationStaffStatePort(
         request.guildId,
         request.actorUserId,
       );
-      const [targetProfileRecord, targetDiscord] =
+      const [targetProfileRecord, targetDiscord, targetProtectionLevel] =
         request.targetId === null
-          ? [null, null]
+          ? [null, null, ProtectionLevel.Normal]
           : await Promise.all([
               dependencies.staffProfiles.getEffectiveProfile(request.guildId, request.targetId),
               dependencies.discord.getMemberState(request.guildId, request.targetId),
+              dependencies.security.getProtectionLevel(request.guildId, 'USER', request.targetId),
             ]);
 
       const actorProfile = toProfileSnapshot(request.guildId, actorProfileRecord);
@@ -79,7 +82,7 @@ export function createModerationStaffStatePort(
                 targetProfile === null &&
                 targetDiscord !== null &&
                 hasElevatedDiscordAuthority(targetDiscord.permissions),
-              protectionLevel: ProtectionLevel.Normal,
+              protectionLevel: targetProtectionLevel,
             };
       const actionPolicy = actorIsOwner
         ? OWNER_POLICY

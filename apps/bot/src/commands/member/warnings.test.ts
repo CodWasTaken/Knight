@@ -1,4 +1,4 @@
-import type { ActionId } from '@knight/contracts';
+import { ProtectionLevel, type ActionId } from '@knight/contracts';
 import { describe, expect, it, vi } from 'vitest';
 import { executeMemberWarnings } from './warnings.js';
 
@@ -6,15 +6,27 @@ const input = { guildId: '100', actorUserId: '42', targetUserId: '77', nowMs: 10
 
 function profile(id: string, rank: number, permissions: readonly ActionId[]) {
   return {
-    id, guildId: '100', profileId: `profile-${id}`, version: 1, profileName: id,
-    discordRoleId: `role-${id}`, rank, permissions, actionPolicies: {},
+    id,
+    guildId: '100',
+    profileId: `profile-${id}`,
+    version: 1,
+    profileName: id,
+    discordRoleId: `role-${id}`,
+    rank,
+    permissions,
+    actionPolicies: {},
   };
 }
 
 function warning(id: string, reason: string, minute: number) {
   return {
-    id, guildId: '100', targetUserId: '77', actorUserId: '55', reason,
-    actorProfileVersionId: null, dmDeliveryStatus: 'DELIVERED',
+    id,
+    guildId: '100',
+    targetUserId: '77',
+    actorUserId: '55',
+    reason,
+    actorProfileVersionId: null,
+    dmDeliveryStatus: 'DELIVERED',
     createdAt: new Date(Date.UTC(2026, 8, 10, 20, minute)),
   };
 }
@@ -28,16 +40,29 @@ function makeDependencies(actorPermissions: readonly ActionId[] = ['member.warni
         userId === '42' ? actor : userId === '77' ? target : null,
       ),
     },
+    security: { getProtectionLevel: vi.fn().mockResolvedValue(ProtectionLevel.Normal) },
     discord: {
       getGuildState: vi.fn().mockResolvedValue({
-        guildId: '100', ownerId: '1', knightUserId: '999', knightRolePosition: 100,
-        knightPermissions: 0n, roles: [],
+        guildId: '100',
+        ownerId: '1',
+        knightUserId: '999',
+        knightRolePosition: 100,
+        knightPermissions: 0n,
+        roles: [],
       }),
       getMemberState: vi.fn().mockResolvedValue({
-        userId: '77', isGuildOwner: false, roleIds: [], highestRolePosition: 99, permissions: 0n,
+        userId: '77',
+        isGuildOwner: false,
+        roleIds: [],
+        highestRolePosition: 99,
+        permissions: 0n,
       }),
     },
-    warnings: { listForUser: vi.fn().mockResolvedValue([warning('w2', 'Newest', 2), warning('w1', 'Older', 1)]) },
+    warnings: {
+      listForUser: vi
+        .fn()
+        .mockResolvedValue([warning('w2', 'Newest', 2), warning('w1', 'Older', 1)]),
+    },
   };
 }
 
@@ -61,8 +86,12 @@ describe('executeMemberWarnings', () => {
   it('allows the guild owner without a Staff Profile', async () => {
     const deps = makeDependencies([]);
     deps.discord.getGuildState.mockResolvedValueOnce({
-      guildId: '100', ownerId: '42', knightUserId: '999', knightRolePosition: 100,
-      knightPermissions: 0n, roles: [],
+      guildId: '100',
+      ownerId: '42',
+      knightUserId: '999',
+      knightRolePosition: 100,
+      knightPermissions: 0n,
+      roles: [],
     });
     deps.staffProfiles.getEffectiveProfile.mockResolvedValue(null);
     const result = await executeMemberWarnings(input, deps);
@@ -73,7 +102,9 @@ describe('executeMemberWarnings', () => {
   it('safely truncates long histories to a Discord-reply-sized payload', async () => {
     const deps = makeDependencies();
     deps.warnings.listForUser.mockResolvedValue(
-      Array.from({ length: 30 }, (_, index) => warning(`w${index}`, `Reason ${index} ${'x'.repeat(120)}`, index)),
+      Array.from({ length: 30 }, (_, index) =>
+        warning(`w${index}`, `Reason ${index} ${'x'.repeat(120)}`, index),
+      ),
     );
     const result = await executeMemberWarnings(input, deps);
     expect(result.allowed).toBe(true);

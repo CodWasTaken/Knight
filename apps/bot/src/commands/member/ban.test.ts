@@ -1,4 +1,4 @@
-import { PolicyDecision, type SecurityDecision } from '@knight/contracts';
+import { PolicyDecision, ProtectionLevel, type SecurityDecision } from '@knight/contracts';
 import { PermissionsBitField } from 'discord.js';
 import type {
   GuardedActionContext,
@@ -38,6 +38,7 @@ function makeDependencies(decision: SecurityDecision = allowDecision) {
     staffProfiles: {
       getEffectiveProfile: vi.fn().mockResolvedValue(null),
     },
+    security: { getProtectionLevel: vi.fn().mockResolvedValue(ProtectionLevel.Normal) },
     rateLimits: {
       consume: vi.fn(),
     },

@@ -1,4 +1,4 @@
-import { PolicyDecision, type SecurityDecision } from '@knight/contracts';
+import { PolicyDecision, ProtectionLevel, type SecurityDecision } from '@knight/contracts';
 import { MessageFlags, type Interaction } from 'discord.js';
 import { describe, expect, it, vi } from 'vitest';
 import { routeInteraction } from './router.js';
@@ -23,20 +23,34 @@ function makeModerationDependencies(decision: SecurityDecision = denied) {
   return {
     authorize: vi.fn().mockResolvedValue(decision),
     staffProfiles: { getEffectiveProfile: vi.fn().mockResolvedValue(null) },
+    security: { getProtectionLevel: vi.fn().mockResolvedValue(ProtectionLevel.Normal) },
     rateLimits: { consume: vi.fn() },
-    decisions: { record: vi.fn() }, securityRecorder: { record: vi.fn().mockResolvedValue({ entryHash: 'ledger-hash' }) },
+    decisions: { record: vi.fn() },
+    securityRecorder: { record: vi.fn().mockResolvedValue({ entryHash: 'ledger-hash' }) },
     correlations: { create: vi.fn().mockResolvedValue(undefined) },
     discord: {
       getGuildState: vi.fn().mockResolvedValue({
-        guildId: '100', ownerId: '42', knightUserId: '999',
-        knightRolePosition: 100, knightPermissions: 0n, roles: [],
+        guildId: '100',
+        ownerId: '42',
+        knightUserId: '999',
+        knightRolePosition: 100,
+        knightPermissions: 0n,
+        roles: [],
       }),
       getMemberState: vi.fn().mockResolvedValue(null),
-      banMember: vi.fn(), kickMember: vi.fn(), timeoutMember: vi.fn(), unbanMember: vi.fn(),
-      sendDirectMessage: vi.fn(), fetchRecentMessages: vi.fn().mockResolvedValue([]),
+      banMember: vi.fn(),
+      kickMember: vi.fn(),
+      timeoutMember: vi.fn(),
+      unbanMember: vi.fn(),
+      sendDirectMessage: vi.fn(),
+      fetchRecentMessages: vi.fn().mockResolvedValue([]),
       deleteMessages: vi.fn().mockResolvedValue(0),
     },
-    warnings: { create: vi.fn(), setDmDeliveryStatus: vi.fn(), listForUser: vi.fn().mockResolvedValue([]) },
+    warnings: {
+      create: vi.fn(),
+      setDmDeliveryStatus: vi.fn(),
+      listForUser: vi.fn().mockResolvedValue([]),
+    },
     createCorrelationId: vi.fn(() => 'corr-1'),
   };
 }

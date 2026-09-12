@@ -1,4 +1,4 @@
-import type { WarningRepository } from '@knight/database';
+import type { SecurityRepository, WarningRepository } from '@knight/database';
 import type { DiscordActionPort } from '@knight/discord';
 import { evaluateCapability } from '@knight/security';
 import { PolicyDecision } from '@knight/contracts';
@@ -16,6 +16,7 @@ export type MemberWarningsCommandInput = Readonly<{
 
 export type MemberWarningsCommandDependencies = Readonly<{
   staffProfiles: Pick<StaffRepository, 'getEffectiveProfile'>;
+  security: Pick<SecurityRepository, 'getProtectionLevel'>;
   discord: Pick<DiscordActionPort, 'getGuildState' | 'getMemberState'>;
   warnings: Pick<WarningRepository, 'listForUser'>;
 }>;
@@ -27,7 +28,10 @@ function compactReason(reason: string): string {
   return singleLine.length <= 500 ? singleLine : `${singleLine.slice(0, 497)}...`;
 }
 
-function formatHistory(targetUserId: string, warnings: Awaited<ReturnType<WarningRepository['listForUser']>>): string {
+function formatHistory(
+  targetUserId: string,
+  warnings: Awaited<ReturnType<WarningRepository['listForUser']>>,
+): string {
   if (warnings.length === 0) return `No Knight warnings found for <@${targetUserId}>.`;
   let content = `Knight warnings for <@${targetUserId}>:`;
   let shown = 0;
@@ -60,14 +64,18 @@ export async function executeMemberWarnings(
     });
     const decision = evaluateCapability(context);
     if (decision.decision !== PolicyDecision.Allow) {
-      const content = decision.code === 'PERMISSION_MISSING'
-        ? 'Warning history denied: your Knight Staff Profile does not grant member.warnings.view.'
-        : `Warning history denied: ${decision.reason}`;
+      const content =
+        decision.code === 'PERMISSION_MISSING'
+          ? 'Warning history denied: your Knight Staff Profile does not grant member.warnings.view.'
+          : `Warning history denied: ${decision.reason}`;
       return { allowed: false, content };
     }
     const warnings = await dependencies.warnings.listForUser(input.guildId, input.targetUserId);
     return { allowed: true, content: formatHistory(input.targetUserId, warnings) };
   } catch {
-    return { allowed: false, content: 'Warning history is unavailable because Knight could not verify the request safely.' };
+    return {
+      allowed: false,
+      content: 'Warning history is unavailable because Knight could not verify the request safely.',
+    };
   }
 }

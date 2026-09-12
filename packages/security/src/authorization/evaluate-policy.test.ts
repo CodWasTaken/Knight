@@ -182,4 +182,12 @@ describe('evaluatePolicy', () => {
       'APPROVAL_REQUIRED',
     );
   });
+
+  it('hard-denies a non-owner action against an immutable protected target', () => {
+    expectDecision(
+      context({ target: { ...context().target!, protectionLevel: ProtectionLevel.Immutable } }),
+      PolicyDecision.Deny,
+      'PROTECTED_TARGET',
+    );
+  });
 });

@@ -1,4 +1,4 @@
-import { type ActionId, type ActionPolicy } from '@knight/contracts';
+import { ProtectionLevel, type ActionId, type ActionPolicy } from '@knight/contracts';
 import { authorizeGuardedAction } from '@knight/security';
 import { describe, expect, it, vi } from 'vitest';
 import { executeModerationAction } from './moderation-executor.js';
@@ -28,6 +28,7 @@ function makeDependencies(action: ActionId = 'member.kick') {
         userId === '42' ? actor : null,
       ),
     },
+    security: { getProtectionLevel: vi.fn().mockResolvedValue(ProtectionLevel.Normal) },
     rateLimits: { consume: vi.fn().mockResolvedValue({ allowed: true, windows: [] }) },
     decisions: { record: vi.fn().mockResolvedValue('decision-1') },
     securityRecorder: { record: vi.fn().mockResolvedValue({ entryHash: 'ledger-hash' }) },

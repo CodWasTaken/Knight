@@ -1,4 +1,9 @@
-import { PolicyDecision, type ActionId, type SecurityDecision } from '@knight/contracts';
+import {
+  PolicyDecision,
+  ProtectionLevel,
+  type ActionId,
+  type SecurityDecision,
+} from '@knight/contracts';
 import { PermissionsBitField } from 'discord.js';
 import { describe, expect, it, vi } from 'vitest';
 import { executeMessagePurge } from './purge.js';
@@ -22,7 +27,11 @@ const input = {
   nowMs: 10_000,
 } as const;
 
-function profile(userId: string, rank: number, permissions: readonly ActionId[] = ['message.purge']) {
+function profile(
+  userId: string,
+  rank: number,
+  permissions: readonly ActionId[] = ['message.purge'],
+) {
   return {
     id: `${userId}-version`,
     guildId: '100',
@@ -55,8 +64,10 @@ function makeDependencies(decision: SecurityDecision = allow) {
         return null;
       }),
     },
+    security: { getProtectionLevel: vi.fn().mockResolvedValue(ProtectionLevel.Normal) },
     rateLimits: { consume: vi.fn() },
-    decisions: { record: vi.fn() }, securityRecorder: { record: vi.fn().mockResolvedValue({ entryHash: 'ledger-hash' }) },
+    decisions: { record: vi.fn() },
+    securityRecorder: { record: vi.fn().mockResolvedValue({ entryHash: 'ledger-hash' }) },
     correlations: { create: vi.fn().mockResolvedValue(undefined) },
     createCorrelationId: vi.fn(() => 'corr-1'),
     discord: {
@@ -73,8 +84,7 @@ function makeDependencies(decision: SecurityDecision = allow) {
         isGuildOwner: userId === '1',
         roleIds: [],
         highestRolePosition: 1,
-        permissions:
-          userId === '66' ? PermissionsBitField.Flags.Administrator : 0n,
+        permissions: userId === '66' ? PermissionsBitField.Flags.Administrator : 0n,
       })),
       fetchRecentMessages: vi.fn().mockResolvedValue(messages),
       deleteMessages: vi.fn().mockResolvedValue(2),
@@ -119,7 +129,10 @@ describe('executeMessagePurge', () => {
       expect.objectContaining({ action: 'message.purge', targetId: null }),
       expect.anything(),
     );
-    expect(deps.discord.fetchRecentMessages).toHaveBeenCalledWith({ channelId: 'channel-1', limit: 10 });
+    expect(deps.discord.fetchRecentMessages).toHaveBeenCalledWith({
+      channelId: 'channel-1',
+      limit: 10,
+    });
     expect(deps.discord.deleteMessages).toHaveBeenCalledWith({
       channelId: 'channel-1',
       messageIds: ['lower', 'ordinary'],

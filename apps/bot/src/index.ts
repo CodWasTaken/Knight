@@ -7,6 +7,7 @@ import {
   GuildRepository,
   PolicyDecisionRepository,
   SecurityLedgerRepository,
+  SecurityRepository,
   SecurityManagerRepository,
   StaffRepository,
   WarningRepository,
@@ -82,10 +83,12 @@ export function createCommandRouterDependencies(input: {
   const managers = new SecurityManagerRepository(input.database);
   const warnings = new WarningRepository(input.database);
   const securityLedger = new SecurityLedgerRepository(input.database);
+  const security = new SecurityRepository(input.database);
   const securityRecorder = new SecurityRecorder({ ledger: securityLedger, discord: input.discord });
   const moderation = {
     authorize: authorizeGuardedAction,
     staffProfiles,
+    security,
     rateLimits: new RateLimitStore(input.redis),
     decisions: new PolicyDecisionRepository(input.database),
     securityRecorder,
@@ -137,7 +140,7 @@ export function createCommandRouterDependencies(input: {
     },
     memberBan: moderation,
     memberWarn: { ...moderation, warnings },
-    memberWarnings: { staffProfiles, discord: input.discord, warnings },
+    memberWarnings: { staffProfiles, security, discord: input.discord, warnings },
     memberTimeout: moderation,
     memberKick: moderation,
     memberUnban: moderation,
