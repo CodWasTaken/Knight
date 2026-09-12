@@ -1,4 +1,5 @@
 export * from './actions.js';
+export * from './backup.js';
 export * from './emergency.js';
 export * from './moderation.js';
 export * from './policy.js';

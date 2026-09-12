@@ -36,6 +36,13 @@
       "when": 1789208715214,
       "tag": "0004_slimy_blacklash",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1789230216975,
+      "tag": "0005_greedy_talisman",
+      "breakpoints": true
     }
   ]
 }

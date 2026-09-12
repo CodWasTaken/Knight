@@ -8,3 +8,4 @@ export * from './repositories/policy-decision-repository.js';
 export * from './repositories/warning-repository.js';
 export * from './repositories/security-ledger-repository.js';
 export * from './repositories/security-repository.js';
+export * from './repositories/backup-repository.js';
