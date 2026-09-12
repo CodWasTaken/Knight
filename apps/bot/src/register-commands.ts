@@ -150,6 +150,16 @@ const staff = new SlashCommandBuilder()
       ),
   );
 
+const backup = new SlashCommandBuilder()
+  .setName('backup')
+  .setDescription('Manage Knight local backups.')
+  .addSubcommand((command) =>
+    command.setName('create').setDescription('Queue a local structural backup.'),
+  )
+  .addSubcommand((command) =>
+    command.setName('status').setDescription('Show the latest backup and recovery status.'),
+  );
+
 const security = new SlashCommandBuilder()
   .setName('security')
   .setDescription('Manage Knight security authority.')
@@ -225,7 +235,7 @@ const security = new SlashCommandBuilder()
       ),
   );
 
-export const KNIGHT_COMMANDS = [doctor, setup, member, message, staff, security] as const;
+export const KNIGHT_COMMANDS = [doctor, setup, member, message, staff, security, backup] as const;
 
 export async function registerCommands(client: Client<true>): Promise<void> {
   await client.application.commands.set(KNIGHT_COMMANDS.map((command) => command.toJSON()));

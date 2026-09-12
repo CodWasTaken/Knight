@@ -84,6 +84,10 @@ function makeRouterDependencies() {
       grant: vi.fn().mockResolvedValue(undefined),
       revoke: vi.fn().mockResolvedValue(undefined),
     },
+    backup: {
+      create: vi.fn().mockResolvedValue({ content: 'Backup queued: backup-1 (PENDING).' }),
+      status: vi.fn().mockResolvedValue({ content: 'Latest backup: backup-1 — COMPLETED.' }),
+    },
     emergency: {
       status: vi.fn().mockResolvedValue({
         mode: 'NORMAL',
@@ -278,6 +282,22 @@ describe('routeInteraction', () => {
     await routeInteraction(interaction, dependencies);
 
     expect(dependencies.roleSync.inspect).toHaveBeenCalledWith('100', '77');
+  });
+
+  it('routes /backup create and /backup status with guild and actor identity', async () => {
+    const dependencies = makeRouterDependencies();
+    const create = fakeCommandInteraction('backup', 'create');
+    await routeInteraction(create.interaction, dependencies);
+    expect(dependencies.backup.create).toHaveBeenCalledWith({ guildId: '100', actorUserId: '42' });
+    expect(create.reply).toHaveBeenCalledWith(expect.objectContaining({
+      content: expect.stringContaining('Backup queued'),
+      flags: MessageFlags.Ephemeral,
+    }));
+
+    const status = fakeCommandInteraction('backup', 'status');
+    await routeInteraction(status.interaction, dependencies);
+    expect(dependencies.backup.status).toHaveBeenCalledWith({ guildId: '100', actorUserId: '42' });
+    expect(status.reply).toHaveBeenCalledWith(expect.objectContaining({ flags: MessageFlags.Ephemeral }));
   });
 
   it('routes /security manager-add into the owner-only service', async () => {

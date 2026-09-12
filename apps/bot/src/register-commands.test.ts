@@ -40,6 +40,7 @@ describe('Knight moderation command registration', () => {
       'message',
       'staff',
       'security',
+      'backup',
     ]);
     expect(command('member').options?.map((item) => item.name)).toEqual([
       'warn',
@@ -50,6 +51,7 @@ describe('Knight moderation command registration', () => {
       'unban',
     ]);
     expect(command('message').options?.map((item) => item.name)).toEqual(['purge']);
+    expect(command('backup').options?.map((item) => item.name)).toEqual(['create', 'status']);
     expect(command('security').options?.map((item) => item.name)).toEqual([
       'manager-add',
       'manager-remove',
@@ -124,6 +126,11 @@ describe('Knight moderation command registration', () => {
       expect.objectContaining({ name: 'user', type: ApplicationCommandOptionType.User }),
       expect.objectContaining({ name: 'reason', type: ApplicationCommandOptionType.String }),
     ]);
+  });
+
+  it('registers exact backup commands without extra options', () => {
+    expect(subcommand('backup', 'create').options ?? []).toEqual([]);
+    expect(subcommand('backup', 'status').options ?? []).toEqual([]);
   });
 
   it('registers fixed emergency controls with required reasons and Panic confirmation', () => {

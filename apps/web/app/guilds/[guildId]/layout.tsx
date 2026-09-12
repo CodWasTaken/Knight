@@ -40,6 +40,7 @@ export default async function GuildLayout({
           <Link href={`/guilds/${guildId}/logs`}>Logs</Link>
           <Link href={`/guilds/${guildId}/security`}>Security</Link>
           <Link href={`/guilds/${guildId}/security/protected`}>Protected</Link>
+          <Link href={`/guilds/${guildId}/recovery`}>Recovery</Link>
           <Link href={`/guilds/${guildId}/setup`}>Setup</Link>
         </nav>
         <Link className="guildExit" href="/">

@@ -1,4 +1,5 @@
 import {
+  BackupRepository,
   GuildRepository,
   SecurityLedgerRepository,
   SecurityManagerRepository,
@@ -18,5 +19,6 @@ describe('createWebRepositories', () => {
     expect(repositories.securityLedger).toBeInstanceOf(SecurityLedgerRepository);
     expect(repositories.security).toBeInstanceOf(SecurityRepository);
     expect(repositories.staff).toBeInstanceOf(StaffRepository);
+    expect(repositories.backups).toBeInstanceOf(BackupRepository);
   });
 });

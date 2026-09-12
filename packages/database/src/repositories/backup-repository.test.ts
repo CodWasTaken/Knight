@@ -151,6 +151,32 @@ describe('backup persistence', () => {
     ).rejects.toThrow('Backup not found in guild');
   });
 
+  it('lists recent recovery jobs newest-first and scoped to the guild', async () => {
+    const firstBackup = await backups.enqueueBackup({ guildId: 'g1', requestedBy: 'owner-1' });
+    await backups.completeBackup({ guildId: 'g1', backupId: firstBackup.id, relativePath: 'g1/one.json.gz', sha256: 'e'.repeat(64) });
+    const first = await backups.enqueueRestorePreview({ guildId: 'g1', backupId: firstBackup.id, requestedBy: 'owner-1' });
+    const secondBackup = await backups.enqueueBackup({ guildId: 'g1', requestedBy: 'owner-1' });
+    await backups.completeBackup({ guildId: 'g1', backupId: secondBackup.id, relativePath: 'g1/two.json.gz', sha256: 'f'.repeat(64) });
+    const second = await backups.enqueueRestorePreview({ guildId: 'g1', backupId: secondBackup.id, requestedBy: 'owner-1' });
+
+    const otherBackup = await backups.enqueueBackup({ guildId: 'g2', requestedBy: 'owner-2' });
+    await backups.completeBackup({ guildId: 'g2', backupId: otherBackup.id, relativePath: 'g2/one.json.gz', sha256: '0'.repeat(64) });
+    await backups.enqueueRestorePreview({ guildId: 'g2', backupId: otherBackup.id, requestedBy: 'owner-2' });
+
+    expect((await backups.listRecoveryJobs('g1', 2)).map((job) => job.id)).toEqual([second.id, first.id]);
+  });
+
+  it('finds an active recovery job only within the requested guild', async () => {
+    const backup = await backups.enqueueBackup({ guildId: 'g1', requestedBy: 'owner-1' });
+    await backups.completeBackup({
+      guildId: 'g1', backupId: backup.id, relativePath: 'g1/active.json.gz', sha256: 'e'.repeat(64),
+    });
+    const job = await backups.enqueueRestorePreview({ guildId: 'g1', backupId: backup.id, requestedBy: 'owner-1' });
+
+    expect(await backups.getActiveRecoveryJob('g1')).toMatchObject({ id: job.id, status: 'PENDING' });
+    expect(await backups.getActiveRecoveryJob('g2')).toBeNull();
+  });
+
   it('persists restore checkpoints and the failure that stopped execution', async () => {
     const backup = await backups.enqueueBackup({ guildId: 'g1', requestedBy: 'owner-1' });
     await backups.completeBackup({

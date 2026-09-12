@@ -163,6 +163,21 @@ export class BackupRepository {
       .limit(Math.max(1, Math.min(limit, 100)));
   }
 
+  public async getActiveRecoveryJob(guildId: string): Promise<RecoveryJobRecord | null> {
+    const [record] = await this.database.db
+      .select()
+      .from(recoveryJobs)
+      .where(
+        and(
+          eq(recoveryJobs.guildId, guildId),
+          inArray(recoveryJobs.status, ['PENDING', 'RUNNING', 'PREVIEW_READY']),
+        ),
+      )
+      .orderBy(desc(recoveryJobs.updatedAt), desc(recoveryJobs.id))
+      .limit(1);
+    return record ?? null;
+  }
+
   public async enqueueRestorePreview(input: {
     guildId: string;
     backupId: string;
@@ -274,6 +289,15 @@ export class BackupRepository {
       .returning();
     if (!record) throw new Error('Recovery job not found in guild');
     return record;
+  }
+
+  public async listRecoveryJobs(guildId: string, limit = 20): Promise<RecoveryJobRecord[]> {
+    return this.database.db
+      .select()
+      .from(recoveryJobs)
+      .where(eq(recoveryJobs.guildId, guildId))
+      .orderBy(desc(recoveryJobs.createdAt), desc(recoveryJobs.id))
+      .limit(Math.max(1, Math.min(limit, 100)));
   }
 
   public async getRecoveryJob(

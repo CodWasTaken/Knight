@@ -1,4 +1,5 @@
 import type { SecurityLockdownScope } from '@knight/contracts';
+import type { BackupCommandPort } from './backup.js';
 import { MessageFlags, type Interaction } from 'discord.js';
 import { executeDoctorCommand, type DoctorCommandDependencies } from './doctor.js';
 import { executeMessagePurge, type MessagePurgeCommandDependencies } from './message/purge.js';
@@ -46,6 +47,7 @@ export type CommandRouterDependencies = Readonly<{
     StaffRemoveService &
     StaffInspectService;
   securityManagers: SecurityManagerGrantService & SecurityManagerRevokeService;
+  backup: BackupCommandPort;
   emergency: EmergencyCommandService;
   setup: SetupCommandDependencies;
   doctor: DoctorCommandDependencies;
@@ -53,7 +55,9 @@ export type CommandRouterDependencies = Readonly<{
 }>;
 
 const EPHEMERAL = MessageFlags.Ephemeral;
-const IMPLEMENTED_COMMANDS = new Set(['member', 'message', 'staff', 'security', 'setup', 'doctor']);
+const IMPLEMENTED_COMMANDS = new Set([
+  'member', 'message', 'staff', 'security', 'backup', 'setup', 'doctor',
+]);
 
 export async function routeInteraction(
   interaction: Interaction,
@@ -97,6 +101,15 @@ export async function routeInteraction(
   }
 
   const subcommand = interaction.options.getSubcommand();
+
+  if (interaction.commandName === 'backup') {
+    const input = { guildId: interaction.guildId, actorUserId: interaction.user.id };
+    const result = subcommand === 'create'
+      ? await dependencies.backup.create(input)
+      : await dependencies.backup.status(input);
+    await interaction.reply({ content: result.content, flags: EPHEMERAL });
+    return;
+  }
 
   if (interaction.commandName === 'member') {
     if (subcommand === 'warn') {

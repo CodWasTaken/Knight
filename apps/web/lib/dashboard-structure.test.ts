@@ -15,6 +15,7 @@ describe('dashboard shell structure', () => {
     expect(layout).toContain('Logs');
     expect(layout).toContain('Security');
     expect(layout).toContain('Protected');
+    expect(layout).toContain('Recovery');
     expect(layout).toContain('Setup');
     expect(layout).toContain('href={`/guilds/${guildId}`}');
     expect(layout).toContain('href={`/guilds/${guildId}/staff`}');
@@ -22,6 +23,7 @@ describe('dashboard shell structure', () => {
     expect(layout).toContain('href={`/guilds/${guildId}/logs`}');
     expect(layout).toContain('href={`/guilds/${guildId}/security`}');
     expect(layout).toContain('href={`/guilds/${guildId}/security/protected`}');
+    expect(layout).toContain('href={`/guilds/${guildId}/recovery`}');
     expect(layout).toContain('href={`/guilds/${guildId}/setup`}');
   });
 

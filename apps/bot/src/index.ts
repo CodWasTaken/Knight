@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { parseEnv } from '@knight/config';
 import {
+  BackupRepository,
   closeDatabase,
   createDatabase,
   GuildRepository,
@@ -16,6 +17,7 @@ import { DiscordJsAdapter, type DiscordActionPort } from '@knight/discord';
 import { closeRedis, createRedis, ExecutionCorrelationStore, RateLimitStore } from '@knight/redis';
 import { authorizeGuardedAction } from '@knight/security';
 import { Events, MessageFlags, type Client, type Interaction } from 'discord.js';
+import { BackupCommandService } from './commands/backup.js';
 import { routeInteraction, type CommandRouterDependencies } from './commands/router.js';
 import { createDiscordClient } from './discord-client.js';
 import { registerCommands } from './register-commands.js';
@@ -83,6 +85,7 @@ export function createCommandRouterDependencies(input: {
   createCorrelationId: () => string;
 }): CommandRouterDependencies {
   const guilds = new GuildRepository(input.database);
+  const backups = new BackupRepository(input.database);
   const staffProfiles = new StaffRepository(input.database);
   const managers = new SecurityManagerRepository(input.database);
   const warnings = new WarningRepository(input.database);
@@ -112,6 +115,7 @@ export function createCommandRouterDependencies(input: {
       securityRecorder,
     }),
     securityManagers: new SecurityManagerService({ guilds, managers, security, securityRecorder }),
+    backup: new BackupCommandService({ guilds, managers, backups }),
     emergency: new EmergencyService({
       guilds,
       managers,
