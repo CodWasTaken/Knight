@@ -97,6 +97,9 @@ services:
       APP_URL: ${APP_URL}
       DATABASE_URL: postgres://knight:${POSTGRES_PASSWORD}@postgres:5432/knight
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      KNIGHT_BACKUP_DIR: /data/knight-backups
+    volumes:
+      - knight-backups:/data/knight-backups
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -105,3 +108,4 @@ services:
 
 volumes:
   knight-postgres:
+  knight-backups:
