@@ -1,3 +1,4 @@
+import type { SecurityLockdownScope } from '@knight/contracts';
 import { MessageFlags, type Interaction } from 'discord.js';
 import { executeDoctorCommand, type DoctorCommandDependencies } from './doctor.js';
 import { executeMessagePurge, type MessagePurgeCommandDependencies } from './message/purge.js';
@@ -7,6 +8,14 @@ import { executeMemberTimeout, type MemberTimeoutCommandDependencies } from './m
 import { executeMemberUnban, type MemberUnbanCommandDependencies } from './member/unban.js';
 import { executeMemberWarn, type MemberWarnCommandDependencies } from './member/warn.js';
 import { executeMemberWarnings, type MemberWarningsCommandDependencies } from './member/warnings.js';
+import {
+  executeEmergencyLockdown,
+  executeEmergencyPanic,
+  executeEmergencyPanicClear,
+  executeEmergencyStatus,
+  executeEmergencyUnlock,
+  type EmergencyCommandService,
+} from './security/emergency.js';
 import {
   executeSecurityManagerAdd,
   type SecurityManagerGrantService,
@@ -37,6 +46,7 @@ export type CommandRouterDependencies = Readonly<{
     StaffRemoveService &
     StaffInspectService;
   securityManagers: SecurityManagerGrantService & SecurityManagerRevokeService;
+  emergency: EmergencyCommandService;
   setup: SetupCommandDependencies;
   doctor: DoctorCommandDependencies;
   now: () => number;
@@ -298,6 +308,50 @@ export async function routeInteraction(
       },
       dependencies.securityManagers,
     );
+    await interaction.reply({ content: result.content, flags: EPHEMERAL });
+    return;
+  }
+
+  if (subcommand === 'status') {
+    const result = await executeEmergencyStatus(interaction.guildId, dependencies.emergency);
+    await interaction.reply({ content: result.content, flags: EPHEMERAL });
+    return;
+  }
+
+  const emergencyInput = {
+    guildId: interaction.guildId,
+    actorUserId: interaction.user.id,
+    reason: interaction.options.getString('reason', true),
+  };
+  if (subcommand === 'lockdown') {
+    const result = await executeEmergencyLockdown(
+      {
+        ...emergencyInput,
+        scope: interaction.options.getString('scope', true) as SecurityLockdownScope,
+      },
+      dependencies.emergency,
+    );
+    await interaction.reply({ content: result.content, flags: EPHEMERAL });
+    return;
+  }
+  if (subcommand === 'unlock') {
+    const result = await executeEmergencyUnlock(emergencyInput, dependencies.emergency);
+    await interaction.reply({ content: result.content, flags: EPHEMERAL });
+    return;
+  }
+  if (subcommand === 'panic') {
+    const result = await executeEmergencyPanic(
+      {
+        ...emergencyInput,
+        confirmed: interaction.options.getBoolean('confirm', true),
+      },
+      dependencies.emergency,
+    );
+    await interaction.reply({ content: result.content, flags: EPHEMERAL });
+    return;
+  }
+  if (subcommand === 'panic-clear') {
+    const result = await executeEmergencyPanicClear(emergencyInput, dependencies.emergency);
     await interaction.reply({ content: result.content, flags: EPHEMERAL });
     return;
   }

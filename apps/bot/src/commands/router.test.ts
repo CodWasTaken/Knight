@@ -84,6 +84,18 @@ function makeRouterDependencies() {
       grant: vi.fn().mockResolvedValue(undefined),
       revoke: vi.fn().mockResolvedValue(undefined),
     },
+    emergency: {
+      status: vi.fn().mockResolvedValue({
+        mode: 'NORMAL',
+        lockedScopes: [],
+        reason: null,
+        updatedBy: null,
+      }),
+      lockdown: vi.fn().mockResolvedValue(undefined),
+      unlock: vi.fn().mockResolvedValue(undefined),
+      panic: vi.fn().mockResolvedValue(undefined),
+      clearPanic: vi.fn().mockResolvedValue(undefined),
+    },
     setup: {
       setup: { getState: vi.fn() },
       migrations: { previewBanGuard: vi.fn() },
@@ -106,6 +118,7 @@ type FakeOptions = Readonly<{
   strings?: Readonly<Record<string, string>>;
   roles?: Readonly<Record<string, string>>;
   integers?: Readonly<Record<string, number>>;
+  booleans?: Readonly<Record<string, boolean>>;
 }>;
 
 function fakeCommandInteraction(
@@ -132,6 +145,7 @@ function fakeCommandInteraction(
       getString: (name: string) => options.strings?.[name] ?? '',
       getRole: (name: string) => ({ id: options.roles?.[name] ?? 'role-unknown' }),
       getInteger: (name: string) => options.integers?.[name] ?? 0,
+      getBoolean: (name: string) => options.booleans?.[name] ?? false,
     },
     reply,
   } as unknown as Interaction;
@@ -293,6 +307,73 @@ describe('routeInteraction', () => {
       guildId: '100',
       actorUserId: '42',
       userId: '77',
+    });
+  });
+
+  it('routes emergency status and Lockdown commands ephemerally', async () => {
+    const dependencies = makeRouterDependencies();
+    const status = fakeCommandInteraction('security', 'status');
+    await routeInteraction(status.interaction, dependencies);
+    expect(dependencies.emergency.status).toHaveBeenCalledWith('100');
+    expect(status.reply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: expect.stringContaining('NORMAL'),
+        flags: MessageFlags.Ephemeral,
+      }),
+    );
+
+    const lockdown = fakeCommandInteraction('security', 'lockdown', {
+      strings: { scope: 'MEMBER_MODERATION', reason: 'Investigating access' },
+    });
+    await routeInteraction(lockdown.interaction, dependencies);
+    expect(dependencies.emergency.lockdown).toHaveBeenCalledWith({
+      guildId: '100',
+      actorUserId: '42',
+      scopes: ['MEMBER_MODERATION'],
+      reason: 'Investigating access',
+    });
+    expect(lockdown.reply).toHaveBeenCalledWith(
+      expect.objectContaining({ flags: MessageFlags.Ephemeral }),
+    );
+  });
+
+  it('routes Unlock, Panic, and Panic Clear with required safety inputs', async () => {
+    const dependencies = makeRouterDependencies();
+    await routeInteraction(
+      fakeCommandInteraction('security', 'unlock', {
+        strings: { reason: 'Investigation complete' },
+      }).interaction,
+      dependencies,
+    );
+    await routeInteraction(
+      fakeCommandInteraction('security', 'panic', {
+        strings: { reason: 'Confirmed compromise' },
+        booleans: { confirm: true },
+      }).interaction,
+      dependencies,
+    );
+    await routeInteraction(
+      fakeCommandInteraction('security', 'panic-clear', {
+        strings: { reason: 'Access restored' },
+      }).interaction,
+      dependencies,
+    );
+
+    expect(dependencies.emergency.unlock).toHaveBeenCalledWith({
+      guildId: '100',
+      actorUserId: '42',
+      reason: 'Investigation complete',
+    });
+    expect(dependencies.emergency.panic).toHaveBeenCalledWith({
+      guildId: '100',
+      actorUserId: '42',
+      reason: 'Confirmed compromise',
+      confirmed: true,
+    });
+    expect(dependencies.emergency.clearPanic).toHaveBeenCalledWith({
+      guildId: '100',
+      actorUserId: '42',
+      reason: 'Access restored',
     });
   });
 

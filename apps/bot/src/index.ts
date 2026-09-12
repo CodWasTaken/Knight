@@ -20,6 +20,7 @@ import { routeInteraction, type CommandRouterDependencies } from './commands/rou
 import { createDiscordClient } from './discord-client.js';
 import { registerCommands } from './register-commands.js';
 import { FirewallService } from './security/firewall-service.js';
+import { EmergencyService } from './security/emergency-service.js';
 import { installNativeListeners } from './security/install-native-listeners.js';
 import { NativeEventService } from './security/native-event-service.js';
 import { SecurityManagerService } from './security/security-manager-service.js';
@@ -110,6 +111,13 @@ export function createCommandRouterDependencies(input: {
       securityRecorder,
     }),
     securityManagers: new SecurityManagerService({ guilds, managers, securityRecorder }),
+    emergency: new EmergencyService({
+      guilds,
+      managers,
+      security,
+      securityRecorder,
+      now: () => new Date(),
+    }),
     doctor: {
       checkDatabase: async () => {
         await input.database.pool.query('select 1');

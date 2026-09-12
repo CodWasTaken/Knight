@@ -9,6 +9,7 @@ type OptionShape = Readonly<{
   min_value?: number;
   max_value?: number;
   options?: readonly OptionShape[];
+  choices?: readonly { name: string; value: string }[];
 }>;
 
 type CommandShape = Readonly<{
@@ -49,6 +50,15 @@ describe('Knight moderation command registration', () => {
       'unban',
     ]);
     expect(command('message').options?.map((item) => item.name)).toEqual(['purge']);
+    expect(command('security').options?.map((item) => item.name)).toEqual([
+      'manager-add',
+      'manager-remove',
+      'status',
+      'lockdown',
+      'unlock',
+      'panic',
+      'panic-clear',
+    ]);
   });
 
   it.each(['warn', 'timeout', 'kick', 'ban'])(
@@ -113,6 +123,44 @@ describe('Knight moderation command registration', () => {
       }),
       expect.objectContaining({ name: 'user', type: ApplicationCommandOptionType.User }),
       expect.objectContaining({ name: 'reason', type: ApplicationCommandOptionType.String }),
+    ]);
+  });
+
+  it('registers fixed emergency controls with required reasons and Panic confirmation', () => {
+    expect(subcommand('security', 'status').options ?? []).toEqual([]);
+    expect(subcommand('security', 'lockdown').options).toEqual([
+      expect.objectContaining({
+        name: 'scope',
+        type: ApplicationCommandOptionType.String,
+        required: true,
+        choices: [
+          { name: 'Member moderation', value: 'MEMBER_MODERATION' },
+          { name: 'Roles', value: 'ROLES' },
+          { name: 'Channels', value: 'CHANNELS' },
+          { name: 'Bots and webhooks', value: 'BOTS_WEBHOOKS' },
+          { name: 'Security configuration', value: 'SECURITY_CONFIG' },
+          { name: 'Full', value: 'FULL' },
+        ],
+      }),
+      expect.objectContaining({
+        name: 'reason',
+        type: ApplicationCommandOptionType.String,
+        required: true,
+      }),
+    ]);
+    expect(subcommand('security', 'unlock').options).toEqual([
+      expect.objectContaining({ name: 'reason', required: true }),
+    ]);
+    expect(subcommand('security', 'panic').options).toEqual([
+      expect.objectContaining({ name: 'reason', required: true }),
+      expect.objectContaining({
+        name: 'confirm',
+        type: ApplicationCommandOptionType.Boolean,
+        required: true,
+      }),
+    ]);
+    expect(subcommand('security', 'panic-clear').options).toEqual([
+      expect.objectContaining({ name: 'reason', required: true }),
     ]);
   });
 });

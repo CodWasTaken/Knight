@@ -168,6 +168,61 @@ const security = new SlashCommandBuilder()
       .addUserOption((option) =>
         option.setName('user').setDescription('Security Manager to revoke.').setRequired(true),
       ),
+  )
+  .addSubcommand((command) =>
+    command.setName('status').setDescription('Show the current Knight emergency security state.'),
+  )
+  .addSubcommand((command) =>
+    command
+      .setName('lockdown')
+      .setDescription('Freeze a fixed group of privileged Knight actions.')
+      .addStringOption((option) =>
+        option
+          .setName('scope')
+          .setDescription('Privileged action group to freeze.')
+          .setRequired(true)
+          .addChoices(
+            { name: 'Member moderation', value: 'MEMBER_MODERATION' },
+            { name: 'Roles', value: 'ROLES' },
+            { name: 'Channels', value: 'CHANNELS' },
+            { name: 'Bots and webhooks', value: 'BOTS_WEBHOOKS' },
+            { name: 'Security configuration', value: 'SECURITY_CONFIG' },
+            { name: 'Full', value: 'FULL' },
+          ),
+      )
+      .addStringOption((option) =>
+        option.setName('reason').setDescription('Reason for Lockdown.').setRequired(true),
+      ),
+  )
+  .addSubcommand((command) =>
+    command
+      .setName('unlock')
+      .setDescription('Clear Lockdown and return Knight to Normal.')
+      .addStringOption((option) =>
+        option.setName('reason').setDescription('Reason for clearing Lockdown.').setRequired(true),
+      ),
+  )
+  .addSubcommand((command) =>
+    command
+      .setName('panic')
+      .setDescription('Freeze privileged Knight mutations during an emergency.')
+      .addStringOption((option) =>
+        option.setName('reason').setDescription('Reason for Panic.').setRequired(true),
+      )
+      .addBooleanOption((option) =>
+        option
+          .setName('confirm')
+          .setDescription('Confirm that Panic should be activated.')
+          .setRequired(true),
+      ),
+  )
+  .addSubcommand((command) =>
+    command
+      .setName('panic-clear')
+      .setDescription('Clear Panic and return Knight to Normal.')
+      .addStringOption((option) =>
+        option.setName('reason').setDescription('Reason for clearing Panic.').setRequired(true),
+      ),
   );
 
 export const KNIGHT_COMMANDS = [doctor, setup, member, message, staff, security] as const;
