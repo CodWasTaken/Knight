@@ -4,6 +4,7 @@ export const KNIGHT_GATEWAY_INTENTS = [
   GatewayIntentBits.Guilds,
   GatewayIntentBits.GuildMembers,
   GatewayIntentBits.GuildModeration,
+  GatewayIntentBits.GuildWebhooks,
 ] as const;
 
 export function createDiscordClient(): Client {

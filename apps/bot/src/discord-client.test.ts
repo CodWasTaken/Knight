@@ -8,6 +8,7 @@ describe('Knight gateway intents', () => {
       GatewayIntentBits.Guilds,
       GatewayIntentBits.GuildMembers,
       GatewayIntentBits.GuildModeration,
+      GatewayIntentBits.GuildWebhooks,
     ]);
     expect(KNIGHT_GATEWAY_INTENTS).not.toContain(GatewayIntentBits.MessageContent);
   });

@@ -42,6 +42,20 @@ describe('ExecutionCorrelationStore', () => {
     expect(await correlations.consume(correlation.id)).toBeNull();
   });
 
+  it('finds and consumes a correlation by its expected audit event', async () => {
+    await correlations.create(correlation);
+
+    const match = {
+      guildId: correlation.guildId,
+      expectedAuditActorBotId: correlation.expectedAuditActorBotId,
+      action: correlation.action,
+      targetId: correlation.targetId,
+    };
+    expect(await correlations.consumeMatch(match)).toEqual(correlation);
+    expect(await correlations.consumeMatch(match)).toBeNull();
+    expect(await correlations.consume(correlation.id)).toBeNull();
+  });
+
   it('expires short-lived correlations', async () => {
     await correlations.create({ ...correlation, id: 'corr-expiring' }, 40);
     await new Promise((resolve) => setTimeout(resolve, 80));
