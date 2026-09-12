@@ -29,16 +29,24 @@ export interface SetupDependencies {
         enabled: boolean;
       }[]
     >;
+    getCurrentProfileVersion(
+      guildId: string,
+      profileId: string,
+    ): Promise<{ actionPolicies: object } | null>;
   };
   securityLedger: {
     getLoggingSettings(guildId: string): Promise<unknown | null>;
   };
   security: {
     getFirewallSettings(guildId: string): Promise<{ configured: boolean }>;
+    listProtectedResources(guildId: string): Promise<readonly unknown[]>;
     getSecurityState(guildId: string): Promise<{
       mode: 'NORMAL' | 'LOCKDOWN' | 'PANIC';
       lockedScopes: readonly string[];
     }>;
+  };
+  backups: {
+    getPolicy(guildId: string): Promise<unknown | null>;
   };
   discord: {
     getGuildState(guildId: string): Promise<{
@@ -72,6 +80,9 @@ export type SetupStateView = Readonly<{
   manageRolesReady: boolean;
   hierarchyHealthy: boolean;
   blockingRoleIds: readonly string[];
+  currentStepReady: boolean;
+  currentStepBlockers: readonly string[];
+  protectedResourceCount: number;
   nextAction: string;
 }>;
 
@@ -83,6 +94,53 @@ function nextAction(step: SetupStep): string {
   const index = SETUP_STEPS.indexOf(step);
   const next = SETUP_STEPS[index + 1];
   return next === undefined ? 'Review Knight protection status.' : `Continue setup to ${next}.`;
+}
+
+type ReadinessSnapshot = Readonly<{
+  manageRolesReady: boolean;
+  profileReady: boolean;
+  policiesReady: boolean;
+  hierarchyHealthy: boolean;
+  blockingRoleIds: readonly string[];
+  loggingReady: boolean;
+  protectionReady: boolean;
+  backupsReady: boolean;
+  protectedResourceCount: number;
+}>;
+
+function stepBlockers(step: SetupStep, readiness: ReadinessSnapshot): string[] {
+  const blockers: string[] = [];
+  const addHealth = (): void => {
+    if (!readiness.manageRolesReady) blockers.push('Knight requires the Discord Manage Roles permission.');
+    if (!readiness.profileReady) blockers.push('At least one enabled Staff Profile must map to a live Discord role.');
+    if (readiness.blockingRoleIds.length > 0) blockers.push('Knight must be above every enabled Staff Profile role in the Discord hierarchy.');
+  };
+  const addStaff = (): void => {
+    if (!readiness.profileReady) blockers.push('At least one enabled Staff Profile must map to a live Discord role.');
+  };
+  const addPolicies = (): void => {
+    if (!readiness.policiesReady) blockers.push('Every enabled Staff Profile must have current saved action policies.');
+  };
+  const addLogging = (): void => {
+    if (!readiness.loggingReady) blockers.push('Save logging settings before continuing; Disabled is a valid explicit choice.');
+  };
+  const addProtection = (): void => {
+    if (!readiness.protectionReady) blockers.push('Save firewall protection settings before continuing; Observe is a valid explicit choice.');
+  };
+  const addBackups = (): void => {
+    if (!readiness.backupsReady) blockers.push('Save an explicit backup policy before continuing; Disabled is valid.');
+  };
+
+  if (step === 'HEALTH') addHealth();
+  else if (step === 'STAFF') addStaff();
+  else if (step === 'POLICIES') addPolicies();
+  else if (step === 'LOGGING') addLogging();
+  else if (step === 'PROTECTION') addProtection();
+  else if (step === 'BACKUPS') addBackups();
+  else if (step === 'OBSERVE') {
+    addHealth(); addStaff(); addPolicies(); addLogging(); addProtection(); addBackups();
+  }
+  return [...new Set(blockers)];
 }
 export class SetupService {
   public constructor(private readonly dependencies: SetupDependencies) {}
@@ -115,17 +173,19 @@ export class SetupService {
 
   public async getState(guildId: string, actorUserId: string): Promise<SetupStateView> {
     const guild = await this.requireAccess(guildId, actorUserId);
-    const [setup, managers, profiles, discordGuild] = await Promise.all([
-      this.dependencies.guilds.getSetupState(guildId),
-      this.dependencies.managers.listSecurityManagers(guildId),
-      this.dependencies.staff.listProfiles(guildId),
-      this.dependencies.discord.getGuildState(guildId),
-    ]);
+    const [setup, managers, profiles, discordGuild, logging, firewall, protectedResources, backupPolicy] =
+      await Promise.all([
+        this.dependencies.guilds.getSetupState(guildId),
+        this.dependencies.managers.listSecurityManagers(guildId),
+        this.dependencies.staff.listProfiles(guildId),
+        this.dependencies.discord.getGuildState(guildId),
+        this.dependencies.securityLedger.getLoggingSettings(guildId),
+        this.dependencies.security.getFirewallSettings(guildId),
+        this.dependencies.security.listProtectedResources(guildId),
+        this.dependencies.backups.getPolicy(guildId),
+      ]);
     if (setup === null) {
-      throw new SetupError(
-        'SETUP_STATE_MISSING',
-        'Knight setup state is unavailable for this guild.',
-      );
+      throw new SetupError('SETUP_STATE_MISSING', 'Knight setup state is unavailable for this guild.');
     }
 
     const roleById = new Map(discordGuild.roles.map((role) => [role.roleId, role]));
@@ -139,11 +199,24 @@ export class SetupService {
         return role !== undefined && role.position >= discordGuild.knightRolePosition;
       })
       .map((profile) => profile.discordRoleId);
-    const manageRolesReady = hasPermission(
-      discordGuild.knightPermissions,
-      PermissionFlagsBits.ManageRoles,
-    );
+    const manageRolesReady = hasPermission(discordGuild.knightPermissions, PermissionFlagsBits.ManageRoles);
     const profileReady = activeProfiles.length > 0 && missingRoleIds.length === 0;
+    const currentVersions = await Promise.all(
+      activeProfiles.map((profile) => this.dependencies.staff.getCurrentProfileVersion(guildId, profile.id)),
+    );
+    const policiesReady = activeProfiles.length > 0 && currentVersions.every((version) => version !== null);
+    const readiness: ReadinessSnapshot = {
+      manageRolesReady,
+      profileReady,
+      policiesReady,
+      hierarchyHealthy: manageRolesReady && profileReady && blockingRoleIds.length === 0,
+      blockingRoleIds: [...missingRoleIds, ...blockingRoleIds],
+      loggingReady: logging !== null,
+      protectionReady: firewall.configured,
+      backupsReady: backupPolicy !== null,
+      protectedResourceCount: protectedResources.length,
+    };
+    const currentStepBlockers = stepBlockers(setup.step, readiness);
 
     return {
       mode: guild.mode,
@@ -154,8 +227,11 @@ export class SetupService {
       securityManagerCount: managers.length,
       securityManagerIds: managers.map((manager) => manager.userId),
       manageRolesReady,
-      hierarchyHealthy: manageRolesReady && profileReady && blockingRoleIds.length === 0,
-      blockingRoleIds: [...missingRoleIds, ...blockingRoleIds],
+      hierarchyHealthy: readiness.hierarchyHealthy,
+      blockingRoleIds: readiness.blockingRoleIds,
+      currentStepReady: currentStepBlockers.length === 0,
+      currentStepBlockers,
+      protectedResourceCount: readiness.protectedResourceCount,
       nextAction: nextAction(setup.step),
     };
   }
@@ -163,14 +239,8 @@ export class SetupService {
   public async advanceStep(guildId: string, actorUserId: string): Promise<void> {
     await this.requireAccess(guildId, actorUserId);
     await this.requireConfigurationAvailable(guildId);
-    const setup = await this.dependencies.guilds.getSetupState(guildId);
-    if (setup === null) {
-      throw new SetupError(
-        'SETUP_STATE_MISSING',
-        'Knight setup state is unavailable for this guild.',
-      );
-    }
-    const index = SETUP_STEPS.indexOf(setup.step);
+    const state = await this.getState(guildId, actorUserId);
+    const index = SETUP_STEPS.indexOf(state.step);
     const next = SETUP_STEPS[index + 1];
     if (index < 0) {
       throw new SetupError('SETUP_STATE_INVALID', 'Knight setup state contains an unknown step.');
@@ -178,27 +248,13 @@ export class SetupService {
     if (next === undefined) {
       throw new SetupError('SETUP_ALREADY_COMPLETE', 'Knight setup is already complete.');
     }
-    if (
-      setup.step === 'LOGGING' &&
-      (await this.dependencies.securityLedger.getLoggingSettings(guildId)) === null
-    ) {
-      throw new SetupError(
-        'LOGGING_NOT_CONFIGURED',
-        'Configure logging destinations before continuing. Choosing Disabled is valid.',
-      );
+    if (!state.currentStepReady) {
+      throw new SetupError('SETUP_STEP_BLOCKED', state.currentStepBlockers.join(' '));
     }
-    if (
-      setup.step === 'PROTECTION' &&
-      !(await this.dependencies.security.getFirewallSettings(guildId)).configured
-    ) {
-      throw new SetupError(
-        'PROTECTION_NOT_CONFIGURED',
-        'Save the bot and webhook firewall modes before continuing. Observe is valid.',
-      );
-    }
-    const completed = [...new Set<SetupStep>([...setup.completedSteps, setup.step])];
+    const completed = [...new Set<SetupStep>([...state.completedSteps, state.step])];
     await this.dependencies.guilds.updateSetupState(guildId, next, completed);
   }
+
   public async transitionMode(input: {
     guildId: string;
     actorUserId: string;

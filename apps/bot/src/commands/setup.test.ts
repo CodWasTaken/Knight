@@ -14,6 +14,9 @@ function state(mode: GuildMode) {
     manageRolesReady: true,
     hierarchyHealthy: true,
     blockingRoleIds: [],
+    currentStepReady: true,
+    currentStepBlockers: [],
+    protectedResourceCount: 0,
     nextAction: 'Continue setup to COMPLETE.',
   };
 }
@@ -66,4 +69,24 @@ describe('executeSetupCommand', () => {
     expect(result.content).toContain('GUARDED');
     expect(result.content).toContain('rollback');
   });
+  it('shows current-step blockers instead of claiming blocked setup is ready', async () => {
+    const blocked = {
+      ...state(GuildMode.Observe),
+      step: 'BACKUPS' as const,
+      currentStepReady: false,
+      currentStepBlockers: ['Save an explicit backup policy before continuing; Disabled is valid.'],
+    };
+    const setup = { getState: vi.fn().mockResolvedValue(blocked) };
+    const migrations = { previewBanGuard: vi.fn() };
+
+    const result = await executeSetupCommand(
+      { guildId: '100', actorUserId: '42' },
+      { setup, migrations },
+    );
+
+    expect(result.content).toContain('Current step readiness: blocked');
+    expect(result.content).toContain('Save an explicit backup policy');
+    expect(result.content).toContain('Next action: Resolve current setup blockers.');
+  });
+
 });

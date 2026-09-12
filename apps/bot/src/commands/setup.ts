@@ -22,12 +22,14 @@ export async function executeSetupCommand(
     'Knight setup status',
     `Mode: ${state.mode}`,
     `Setup step: ${state.step}`,
+    `Current step readiness: ${state.currentStepReady ? 'ready' : 'blocked'}`,
     `Hierarchy: ${state.hierarchyHealthy ? 'healthy' : 'blocked'}`,
     `Manage Roles: ${state.manageRolesReady ? 'ready' : 'missing'}`,
     `Staff Profiles: ${state.profileReady ? 'ready' : 'not ready'} (${state.profileCount})`,
     `Security Managers: ${state.securityManagerCount}`,
-    `Next action: ${state.nextAction}`,
+    `Next action: ${state.currentStepReady ? state.nextAction : 'Resolve current setup blockers.'}`,
   ];
+  for (const blocker of state.currentStepBlockers) lines.push(`Blocker: ${blocker}`);
 
   if (state.mode === GuildMode.Observe) {
     lines.push(

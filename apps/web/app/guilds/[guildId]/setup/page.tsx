@@ -16,6 +16,24 @@ function status(value: boolean): string {
   return value ? 'Ready' : 'Needs attention';
 }
 
+function stepLinks(step: string, guildId: string): readonly Readonly<{ href: string; label: string }>[] {
+  if (['HEALTH', 'STAFF', 'POLICIES'].includes(step)) {
+    return [{ href: `/guilds/${guildId}/staff`, label: 'Configure Staff Profiles' }];
+  }
+  if (step === 'LOGGING') return [{ href: `/guilds/${guildId}/logging`, label: 'Configure logging' }];
+  if (step === 'PROTECTION') return [{ href: `/guilds/${guildId}/security`, label: 'Configure protection' }];
+  if (step === 'BACKUPS') return [{ href: `/guilds/${guildId}/recovery`, label: 'Configure backups' }];
+  if (step === 'OBSERVE') {
+    return [
+      { href: `/guilds/${guildId}/staff`, label: 'Staff Profiles' },
+      { href: `/guilds/${guildId}/logging`, label: 'Logging' },
+      { href: `/guilds/${guildId}/security`, label: 'Security' },
+      { href: `/guilds/${guildId}/recovery`, label: 'Recovery' },
+    ];
+  }
+  return [];
+}
+
 export default async function SetupPage({
   params,
 }: Readonly<{ params: Promise<{ guildId: string }> }>) {
@@ -46,6 +64,7 @@ export default async function SetupPage({
   const preview =
     state.mode === GuildMode.Test ? await services.migrations.previewBanGuard(guildId) : null;
   const isOwner = accessRole === 'OWNER';
+  const readinessLinks = stepLinks(state.step, guildId);
 
   return (
     <main className="shell">
@@ -94,7 +113,18 @@ export default async function SetupPage({
               <p>{state.blockingRoleIds.join(', ')}</p>
             </div>
           ) : null}
-          <p className="muted">Next action: {state.nextAction}</p>
+          {!state.currentStepReady ? (
+            <div className="notice noticeDanger">
+              <strong>Current setup step is blocked</strong>
+              <ul>
+                {state.currentStepBlockers.map((blocker) => <li key={blocker}>{blocker}</li>)}
+              </ul>
+              {readinessLinks.map((link) => (
+                <Link href={link.href} key={link.href}>{link.label}</Link>
+              ))}
+            </div>
+          ) : null}
+          <p className="muted">Next action: {state.currentStepReady ? state.nextAction : 'Resolve the blockers above.'}</p>
         </section>
 
         <section className="panel">
@@ -134,7 +164,7 @@ export default async function SetupPage({
           {state.step !== 'COMPLETE' ? (
             <form action={advanceSetupAction} className="setupAction">
               <input name="guildId" type="hidden" value={guildId} />
-              <button className="secondary" type="submit">
+              <button className="secondary" disabled={!state.currentStepReady} type="submit">
                 Advance setup step
               </button>
             </form>

@@ -45,6 +45,9 @@ describe('setup page', () => {
           manageRolesReady: true,
           hierarchyHealthy: true,
           blockingRoleIds: [],
+          currentStepReady: true,
+          currentStepBlockers: [],
+          protectedResourceCount: 0,
           nextAction: 'Continue setup to PROTECTION.',
         }),
       },
@@ -58,4 +61,32 @@ describe('setup page', () => {
     expect(html).toContain('href="/guilds/100/logging"');
     expect(html).toContain('Choosing Disabled is valid');
   });
+  it('shows setup blockers, links to the relevant configuration, and disables advancement', async () => {
+    mocks.auth.mockResolvedValue({ user: { id: 'owner' } });
+    const runtime = { repositories: {} };
+    mocks.getWebRuntime.mockReturnValue(runtime);
+    mocks.requireGuildAccess.mockResolvedValue('OWNER');
+    mocks.getWebSetupServices.mockReturnValue({
+      setup: {
+        getState: vi.fn().mockResolvedValue({
+          mode: 'OBSERVE', step: 'BACKUPS', completedSteps: [],
+          profileCount: 1, profileReady: true, securityManagerCount: 0,
+          securityManagerIds: [], manageRolesReady: true, hierarchyHealthy: true,
+          blockingRoleIds: [], currentStepReady: false,
+          currentStepBlockers: ['Save an explicit backup policy before continuing; Disabled is valid.'],
+          protectedResourceCount: 0, nextAction: 'Continue setup to OBSERVE.',
+        }),
+      },
+      migrations: {},
+    });
+
+    const html = renderToStaticMarkup(
+      await SetupPage({ params: Promise.resolve({ guildId: '100' }) }),
+    );
+
+    expect(html).toContain('Save an explicit backup policy before continuing');
+    expect(html).toContain('href="/guilds/100/recovery"');
+    expect(html).toContain('disabled=""');
+  });
+
 });

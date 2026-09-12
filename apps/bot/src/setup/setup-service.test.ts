@@ -24,13 +24,22 @@ function makeDependencies(): SetupDependencies {
       listProfiles: vi
         .fn()
         .mockResolvedValue([{ id: 'profile-1', discordRoleId: 'role-1', enabled: true }]),
+      getCurrentProfileVersion: vi.fn().mockResolvedValue({
+        id: 'version-1', actionPolicies: {}, permissions: [],
+      }),
     },
     securityLedger: {
-      getLoggingSettings: vi.fn().mockResolvedValue(null),
+      getLoggingSettings: vi.fn().mockResolvedValue({
+        guildId: '100', securityChannelId: null, moderationChannelId: null,
+      }),
     },
     security: {
-      getFirewallSettings: vi.fn().mockResolvedValue({ configured: false }),
+      getFirewallSettings: vi.fn().mockResolvedValue({ configured: true }),
+      listProtectedResources: vi.fn().mockResolvedValue([]),
       getSecurityState: vi.fn().mockResolvedValue({ mode: 'NORMAL', lockedScopes: [] }),
+    },
+    backups: {
+      getPolicy: vi.fn().mockResolvedValue({ mode: 'DISABLED' }),
     },
     discord: {
       getGuildState: vi.fn().mockResolvedValue({
@@ -43,6 +52,12 @@ function makeDependencies(): SetupDependencies {
       }),
     },
   };
+}
+
+function setStep(deps: SetupDependencies, step: string): void {
+  deps.guilds.getSetupState = vi.fn().mockResolvedValue({
+    guildId: '100', step, completedSteps: [], updatedAt: new Date(),
+  }) as never;
 }
 
 describe('SetupService', () => {
@@ -105,10 +120,11 @@ describe('SetupService', () => {
       completedSteps: ['WELCOME', 'HEALTH', 'STAFF', 'POLICIES'],
       updatedAt: new Date(),
     });
+    deps.securityLedger.getLoggingSettings = vi.fn().mockResolvedValue(null);
     const service = new SetupService(deps);
 
     await expect(service.advanceStep('100', 'owner')).rejects.toMatchObject({
-      code: 'LOGGING_NOT_CONFIGURED',
+      code: 'SETUP_STEP_BLOCKED',
     });
     expect(deps.guilds.updateSetupState).not.toHaveBeenCalled();
 
@@ -139,10 +155,11 @@ describe('SetupService', () => {
       completedSteps: ['WELCOME', 'HEALTH', 'STAFF', 'POLICIES', 'LOGGING'],
       updatedAt: new Date(),
     });
+    deps.security.getFirewallSettings = vi.fn().mockResolvedValue({ configured: false });
     const service = new SetupService(deps);
 
     await expect(service.advanceStep('100', 'owner')).rejects.toMatchObject({
-      code: 'PROTECTION_NOT_CONFIGURED',
+      code: 'SETUP_STEP_BLOCKED',
     });
     expect(deps.guilds.updateSetupState).not.toHaveBeenCalled();
 
@@ -211,4 +228,100 @@ describe('SetupService', () => {
     ).rejects.toMatchObject({ code: 'INVALID_MODE_TRANSITION' });
     expect(deps.guilds.setMode).not.toHaveBeenCalled();
   });
+  it('blocks HEALTH until Manage Roles, mapped profiles, and hierarchy are healthy', async () => {
+    const deps = makeDependencies();
+    setStep(deps, 'HEALTH');
+    deps.discord.getGuildState = vi.fn().mockResolvedValue({
+      guildId: '100', ownerId: 'owner', knightUserId: 'knight', knightRolePosition: 50,
+      knightPermissions: 0n, roles: [{ roleId: 'role-1', position: 20, permissions: 0n }],
+    });
+    const service = new SetupService(deps);
+
+    const state = await service.getState('100', 'owner');
+    expect(state.currentStepReady).toBe(false);
+    expect(state.currentStepBlockers.join(' ')).toContain('Manage Roles');
+    await expect(service.advanceStep('100', 'owner')).rejects.toMatchObject({ code: 'SETUP_STEP_BLOCKED' });
+    expect(deps.guilds.updateSetupState).not.toHaveBeenCalled();
+  });
+
+  it('blocks STAFF until at least one enabled profile maps to a live Discord role', async () => {
+    const deps = makeDependencies();
+    setStep(deps, 'STAFF');
+    deps.staff.listProfiles = vi.fn().mockResolvedValue([]);
+    const service = new SetupService(deps);
+
+    expect(await service.getState('100', 'owner')).toMatchObject({ currentStepReady: false });
+    await expect(service.advanceStep('100', 'owner')).rejects.toMatchObject({ code: 'SETUP_STEP_BLOCKED' });
+  });
+
+  it('blocks POLICIES when an enabled profile has no current saved policy version', async () => {
+    const deps = makeDependencies();
+    setStep(deps, 'POLICIES');
+    deps.staff.getCurrentProfileVersion = vi.fn().mockResolvedValue(null);
+    const service = new SetupService(deps);
+
+    const state = await service.getState('100', 'owner');
+    expect(state.currentStepReady).toBe(false);
+    expect(state.currentStepBlockers.join(' ')).toContain('action policies');
+    await expect(service.advanceStep('100', 'owner')).rejects.toMatchObject({ code: 'SETUP_STEP_BLOCKED' });
+  });
+
+  it('treats an explicit Disabled logging choice as ready', async () => {
+    const deps = makeDependencies();
+    setStep(deps, 'LOGGING');
+    const service = new SetupService(deps);
+    expect(await service.getState('100', 'owner')).toMatchObject({ currentStepReady: true });
+  });
+
+  it('blocks PROTECTION until firewall settings are explicitly saved', async () => {
+    const deps = makeDependencies();
+    setStep(deps, 'PROTECTION');
+    deps.security.getFirewallSettings = vi.fn().mockResolvedValue({ configured: false });
+    const service = new SetupService(deps);
+
+    expect(await service.getState('100', 'owner')).toMatchObject({ currentStepReady: false });
+    await expect(service.advanceStep('100', 'owner')).rejects.toMatchObject({ code: 'SETUP_STEP_BLOCKED' });
+  });
+
+  it('treats an explicit Disabled backup policy as configured and ready', async () => {
+    const deps = makeDependencies();
+    setStep(deps, 'BACKUPS');
+    const service = new SetupService(deps);
+    expect(await service.getState('100', 'owner')).toMatchObject({ currentStepReady: true });
+  });
+
+  it('blocks BACKUPS when no explicit backup policy exists', async () => {
+    const deps = makeDependencies();
+    setStep(deps, 'BACKUPS');
+    deps.backups.getPolicy = vi.fn().mockResolvedValue(null);
+    const service = new SetupService(deps);
+
+    const state = await service.getState('100', 'owner');
+    expect(state.currentStepReady).toBe(false);
+    expect(state.currentStepBlockers.join(' ')).toContain('backup policy');
+  });
+
+  it('blocks OBSERVE when any prior configuration readiness check is failing', async () => {
+    const deps = makeDependencies();
+    setStep(deps, 'OBSERVE');
+    deps.backups.getPolicy = vi.fn().mockResolvedValue(null);
+    const service = new SetupService(deps);
+
+    const state = await service.getState('100', 'owner');
+    expect(state.currentStepReady).toBe(false);
+    expect(state.currentStepBlockers.join(' ')).toContain('backup policy');
+    await expect(service.advanceStep('100', 'owner')).rejects.toMatchObject({ code: 'SETUP_STEP_BLOCKED' });
+  });
+
+  it('advances OBSERVE to COMPLETE without changing the guild operating mode', async () => {
+    const deps = makeDependencies();
+    setStep(deps, 'OBSERVE');
+    const service = new SetupService(deps);
+
+    await service.advanceStep('100', 'owner');
+
+    expect(deps.guilds.updateSetupState).toHaveBeenCalledWith('100', 'COMPLETE', ['OBSERVE']);
+    expect(deps.guilds.setMode).not.toHaveBeenCalled();
+  });
+
 });

@@ -207,6 +207,9 @@ describe('routeInteraction', () => {
       manageRolesReady: true,
       hierarchyHealthy: true,
       blockingRoleIds: [],
+      currentStepReady: true,
+      currentStepBlockers: [],
+      protectedResourceCount: 0,
       nextAction: 'Continue setup to HEALTH.',
     });
     const { interaction, reply } = fakeCommandInteraction('setup', '');
