@@ -25,11 +25,16 @@ Discord Administrator on a human account does not grant Knight dashboard access,
 Useful non-secret checks are:
 
 ```bash
+docker compose config
 docker compose ps
 docker compose logs --tail=100 postgres redis migrate bot web worker
 ```
 
 A healthy Test-mode report should show Discord, Database, Migrations, and Redis as `ok`, required capability lines as `yes`, role hierarchy as healthy, `Setup mode: TEST`, and a dashboard URL ending in `/guilds/<guild-id>`.
+
+`/doctor` is a service/Discord diagnostic, not the complete setup-readiness workflow. `/setup` additionally checks the current Staff/Profile policy state, explicit Logging choice, saved firewall choice, explicit backup policy, and the final Observe readiness summary. A healthy `/doctor` can therefore coexist with a blocked setup step.
+
+`/doctor` also does not read backup snapshot files. Use the **Recovery** page to confirm a completed backup has integrity metadata and generate a hash-verified restore preview. See [Local backups and recovery](../backups/local-backups-and-recovery.md).
 
 ## When moderation is denied
 

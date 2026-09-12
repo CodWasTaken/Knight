@@ -13,7 +13,9 @@ Knight includes:
 - Versioned Staff Profile metadata/policy editing in the dashboard, with existing-role mapping and Security Manager grant ceilings.
 - Observe, Test, and Guarded operating modes.
 - Guarded replacement of Discord Ban Members, Kick Members, Moderate Members, and Manage Messages for mapped staff roles, with exact permission snapshots and rollback.
-- PostgreSQL authority/persistence, Redis operational rate state, health endpoints, `/doctor`, a worker process, and Docker Compose deployment.
+- PostgreSQL authority/persistence, hash-chained Security Ledger, configurable logging destinations, protected resources, and explicit bot/webhook firewall modes.
+- Local gzip structural backups with SHA-256 verification, preview-first owner-confirmed recovery, durable checkpoints, and worker-only backup-volume access.
+- Redis operational rate/lock state, health endpoints, `/doctor`, a worker process, and Docker Compose deployment.
 
 The guild owner is Knight's ultimate authority. Non-owner mutating moderation cannot target the guild owner or equal/higher Knight-ranked staff. Discord Administrator by itself grants no Knight authority.
 
@@ -40,9 +42,11 @@ Timeout accepts one unit such as `10m`, `1h`, or `1d`, up to 28 days. Warning-hi
 5. [Invite Knight](docs/setup/05-invite-knight.md).
 6. Complete the [first run](docs/setup/06-first-run.md).
 7. Create and edit [Staff Profiles](docs/staff/staff-profiles.md), including [independent action limits](docs/staff/limits.md).
-8. When Test mode is proven, review [Guarded permissions](docs/setup/07-enable-guarded-permissions.md).
+8. Review [Logging and protection](docs/security/logging-and-protection.md).
+9. Configure and test [Local backups and recovery](docs/backups/local-backups-and-recovery.md).
+10. When Test mode is proven, review [Guarded permissions](docs/setup/07-enable-guarded-permissions.md).
 
-For diagnostics, see [`/doctor`](docs/troubleshooting/doctor.md).
+For diagnostics, see [`/doctor`](docs/troubleshooting/doctor.md). For host-loss planning, read [Data residency](docs/security/data-residency.md) and [Disaster recovery](docs/backups/disaster-recovery.md).
 
 ## Local verification
 

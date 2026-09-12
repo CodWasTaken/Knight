@@ -7,21 +7,36 @@ Knight starts in Observe so you can confirm service health, Discord hierarchy, S
 ## Recommended sequence
 
 1. Run `/doctor` in the target server and resolve database, migration, Redis, Discord capability, or hierarchy warnings.
-2. Run `/setup` and work through the persistent setup state.
-3. Open the dashboard and create Staff Profiles by mapping existing manageable Discord roles and assigning a Knight rank.
-4. Configure only the moderation capabilities each profile needs and set independent per-action limits.
+2. Run `/setup` and work through the persistent setup state. The command and dashboard show the current readiness blockers.
+3. Open the dashboard and create at least one enabled Staff Profile by mapping an existing manageable Discord role and assigning a Knight rank.
+4. Save the current Staff Profile versions/action policies, including intentionally disabled actions and independent per-action limits.
 5. Open **Logging** and explicitly save the Security and Moderation notification destinations. Either destination may be **Disabled**; PostgreSQL remains the authoritative Security Ledger.
-6. Open **Security**, choose the bot and webhook firewall modes, and save them once. Observe is the safe default. Enforce removes only inventory entries you explicitly mark Blocked.
-7. Add existing users, roles, or channels under **Protected** only where a stronger target rule is useful.
-8. Review the **Emergency state** panel. Keep it Normal during routine setup; Lockdown and Panic are incident controls.
-9. Assign staff with `/staff assign user:<member> profile:<profile>` and confirm state with `/staff inspect user:<member>`.
-10. Add explicit Knight Security Managers only where needed. Discord Administrator alone does not grant Knight management authority.
-11. Move from Observe to Test.
-12. Exercise Knight's moderation commands with controlled test targets/messages before Guarded.
+6. Open **Security**, choose the bot and webhook firewall modes, and save them once. Observe is the safe explicit default. Enforce removes only inventory entries you explicitly mark Blocked.
+7. Add existing users, roles, or channels under **Protected** only where a stronger target rule is useful. Protected resources are optional.
+8. Open **Recovery** and save one exact backup mode: `DISABLED`, `MANUAL`, or `DAILY`. Disabled is a valid explicit choice; it is different from never configuring backups.
+9. If backups are enabled, queue **Take Backup Now**, wait for a completed SHA-256-backed snapshot, and review a restore preview before relying on recovery.
+10. Review the **Emergency state** panel. Keep it Normal during routine setup; Lockdown and Panic are incident controls.
+11. Assign staff with `/staff assign user:<member> profile:<profile>` and confirm state with `/staff inspect user:<member>`.
+12. Add explicit Knight Security Managers only where needed. Discord Administrator alone does not grant Knight management authority.
+13. Advance `OBSERVE → COMPLETE` only after the readiness summary has no blocking configuration errors. Setup completion does not change the guild's Observe/Test/Guarded operating mode.
+14. Move from Observe to Test explicitly, then exercise Knight's moderation commands with controlled test targets/messages before Guarded.
 
-The setup wizard will not advance past `LOGGING` until logging settings have been saved once. Saving both destinations as **Disabled** satisfies this gate and does not require Knight to create or access a Discord notification channel.
+## Enforced setup gates
 
-The wizard will not advance past `PROTECTION` until the firewall modes have been saved once. Explicitly saving Observe for both firewalls satisfies this gate; protected resources are optional.
+Knight does not blindly advance setup. The current step is persisted in PostgreSQL, re-evaluated against live/persisted state, and blocked with concrete reasons when prerequisites are missing.
+
+- `HEALTH`: Knight has Manage Roles, at least one enabled Staff Profile maps to a live Discord role, and Knight is above mapped Staff Profile roles.
+- `STAFF`: at least one enabled Staff Profile maps to a live Discord role.
+- `POLICIES`: every enabled Staff Profile has a current saved immutable version/action-policy record. An empty action-policy map is a valid explicit all-disabled configuration.
+- `LOGGING`: a logging-settings row has been saved. Both notification destinations may be Disabled.
+- `PROTECTION`: firewall settings have been saved. Observe for both bot and webhook firewalls is valid; protected resources are optional.
+- `BACKUPS`: a backup policy row has been saved. `DISABLED` is valid.
+- `OBSERVE`: all prior readiness checks are re-evaluated and must have no blockers.
+- `COMPLETE`: setup progress is complete only. Knight never changes Observe/Test/Guarded mode as a side effect of completion.
+
+The dashboard disables **Advance setup step** while blocked and links to Staff, Logging, Security, or Recovery where appropriate. `/setup` reports the same readiness and blocker text.
+
+For details on logging/protection see [Logging and protection](../security/logging-and-protection.md). For local snapshots and restore behavior see [Local backups and recovery](../backups/local-backups-and-recovery.md).
 
 ## Emergency controls
 
