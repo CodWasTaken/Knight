@@ -254,6 +254,18 @@ export class SecurityRepository {
     return record;
   }
 
+  public async getBotInventory(
+    guildId: string,
+    botUserId: string,
+  ): Promise<BotInventoryRecord | null> {
+    const [record] = await this.database.db
+      .select()
+      .from(knownBots)
+      .where(and(eq(knownBots.guildId, guildId), eq(knownBots.botUserId, botUserId)))
+      .limit(1);
+    return record ?? null;
+  }
+
   public async upsertWebhookInventory(input: {
     guildId: string;
     webhookId: string;
@@ -271,5 +283,17 @@ export class SecurityRepository {
       .returning();
     if (!record) throw new Error('Failed to upsert webhook inventory');
     return record;
+  }
+
+  public async getWebhookInventory(
+    guildId: string,
+    webhookId: string,
+  ): Promise<WebhookInventoryRecord | null> {
+    const [record] = await this.database.db
+      .select()
+      .from(knownWebhooks)
+      .where(and(eq(knownWebhooks.guildId, guildId), eq(knownWebhooks.webhookId, webhookId)))
+      .limit(1);
+    return record ?? null;
   }
 }

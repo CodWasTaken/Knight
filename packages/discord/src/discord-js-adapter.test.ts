@@ -33,20 +33,39 @@ function makeAdapter() {
   ]);
   const logSend = vi.fn().mockResolvedValue(undefined);
   const logChannel = {
-    id: 'log-1', name: 'security-log', type: ChannelType.GuildText,
-    isTextBased: () => true, send: logSend,
+    id: 'log-1',
+    name: 'security-log',
+    type: ChannelType.GuildText,
+    isTextBased: () => true,
+    send: logSend,
     permissionsFor: vi.fn().mockReturnValue({ has: vi.fn().mockReturnValue(true) }),
   };
   const blockedChannel = {
-    id: 'blocked-1', name: 'blocked-log', type: ChannelType.GuildText,
-    isTextBased: () => true, send: vi.fn(),
+    id: 'blocked-1',
+    name: 'blocked-log',
+    type: ChannelType.GuildText,
+    isTextBased: () => true,
+    send: vi.fn(),
     permissionsFor: vi.fn().mockReturnValue({ has: vi.fn().mockReturnValue(false) }),
   };
   const voiceChannel = { id: 'voice-1', name: 'voice', type: ChannelType.GuildVoice };
-  const guildChannels = new Map([[logChannel.id, logChannel], [blockedChannel.id, blockedChannel], [voiceChannel.id, voiceChannel]]);
+  const guildChannels = new Map([
+    [logChannel.id, logChannel],
+    [blockedChannel.id, blockedChannel],
+    [voiceChannel.id, voiceChannel],
+  ]);
   const guild = {
-    id: '100', ownerId: 'owner', members, roles: { fetch: vi.fn().mockResolvedValue(roles) },
-    channels: { fetch: vi.fn().mockImplementation(async (id?: string) => id ? guildChannels.get(id) ?? null : guildChannels) },
+    id: '100',
+    ownerId: 'owner',
+    members,
+    roles: { fetch: vi.fn().mockResolvedValue(roles) },
+    channels: {
+      fetch: vi
+        .fn()
+        .mockImplementation(async (id?: string) =>
+          id ? (guildChannels.get(id) ?? null) : guildChannels,
+        ),
+    },
   };
   const send = vi.fn().mockResolvedValue(undefined);
   const messages = new Map([
@@ -57,13 +76,34 @@ function makeAdapter() {
     isTextBased: () => true,
     messages: { fetch: vi.fn().mockResolvedValue(messages) },
     bulkDelete: vi.fn().mockResolvedValue(new Map([['m1', {}]])),
+    fetchWebhooks: vi.fn().mockResolvedValue(
+      new Map([
+        ['webhook-1', { id: 'webhook-1', channelId: 'channel-1' }],
+        ['webhook-2', { id: 'webhook-2', channelId: 'channel-1' }],
+      ]),
+    ),
   };
+  const deleteWebhook = vi.fn().mockResolvedValue(undefined);
   const client = {
     guilds: { fetch: vi.fn().mockResolvedValue(guild) },
     users: { fetch: vi.fn().mockResolvedValue({ send }) },
-    channels: { fetch: vi.fn().mockImplementation(async (id: string) => id === 'log-1' ? logChannel : channel) },
+    channels: {
+      fetch: vi
+        .fn()
+        .mockImplementation(async (id: string) => (id === 'log-1' ? logChannel : channel)),
+    },
+    fetchWebhook: vi.fn().mockResolvedValue({ delete: deleteWebhook }),
   };
-  return { adapter: new DiscordJsAdapter(client as never), members, member, send, channel, logChannel, logSend };
+  return {
+    adapter: new DiscordJsAdapter(client as never),
+    members,
+    member,
+    send,
+    channel,
+    logChannel,
+    logSend,
+    deleteWebhook,
+  };
 }
 
 describe('DiscordJsAdapter moderation operations', () => {
@@ -98,6 +138,18 @@ describe('DiscordJsAdapter moderation operations', () => {
     expect(channel.bulkDelete).toHaveBeenCalledWith(['m1'], true);
   });
 
+  it('lists channel webhooks and deletes one through the narrow Discord API', async () => {
+    const { adapter, channel, deleteWebhook } = makeAdapter();
+
+    expect(await adapter.listChannelWebhooks('channel-1')).toEqual([
+      { webhookId: 'webhook-1', channelId: 'channel-1' },
+      { webhookId: 'webhook-2', channelId: 'channel-1' },
+    ]);
+    await adapter.deleteWebhook('webhook-1', 'Blocked by Knight');
+
+    expect(channel.fetchWebhooks).toHaveBeenCalledTimes(1);
+    expect(deleteWebhook).toHaveBeenCalledWith('Blocked by Knight');
+  });
 
   it('lists only supported guild notification channels and checks send permissions', async () => {
     const { adapter } = makeAdapter();

@@ -11,6 +11,10 @@ function dependencies() {
     },
     correlations: { consumeMatch: vi.fn().mockResolvedValue(null) },
     recorder: { record: vi.fn().mockResolvedValue({ id: 1 }) },
+    firewall: {
+      handleBotJoin: vi.fn().mockResolvedValue({ observed: 1, removed: 0 }),
+      handleWebhookUpdate: vi.fn().mockResolvedValue({ observed: 0, removed: 0 }),
+    },
   };
 }
 
@@ -110,5 +114,38 @@ describe('NativeEventService', () => {
       expect.objectContaining({ incidentId: 'incident-1', severity: 'HIGH' }),
       'SECURITY',
     );
+  });
+
+  it('passes bot joins and webhook updates to the explicit firewall', async () => {
+    const deps = dependencies();
+    const service = new NativeEventService(deps);
+
+    await service.record({ ...event, action: 'bot.join', targetType: 'BOT', targetId: 'bot-2' });
+    await service.record({
+      ...event,
+      action: 'webhook.update',
+      targetType: 'WEBHOOK',
+      targetId: 'channel-1',
+    });
+
+    expect(deps.firewall.handleBotJoin).toHaveBeenCalledWith('g1', 'bot-2');
+    expect(deps.firewall.handleWebhookUpdate).toHaveBeenCalledWith('g1', 'channel-1');
+  });
+
+  it('still applies explicit firewall handling when the native ledger append fails', async () => {
+    const deps = dependencies();
+    deps.recorder.record.mockRejectedValueOnce(new Error('ledger unavailable'));
+
+    await expect(
+      new NativeEventService(deps).record({
+        ...event,
+        action: 'bot.join',
+        targetType: 'BOT',
+        targetId: 'bot-2',
+      }),
+    ).rejects.toThrow('ledger unavailable');
+
+    expect(deps.security.recordEvent).toHaveBeenCalledTimes(1);
+    expect(deps.firewall.handleBotJoin).toHaveBeenCalledWith('g1', 'bot-2');
   });
 });

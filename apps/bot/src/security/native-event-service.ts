@@ -5,6 +5,7 @@ import type {
   SecurityResourceType,
 } from '@knight/database';
 import type { ExecutionCorrelation, ExecutionCorrelationStore } from '@knight/redis';
+import type { FirewallService } from './firewall-service.js';
 import type { SecurityRecorder } from './security-recorder.js';
 
 export type NativeEventTargetType = SecurityResourceType | 'BOT' | 'WEBHOOK';
@@ -25,6 +26,7 @@ export type NativeEventServiceDependencies = Readonly<{
   security: Pick<SecurityRepository, 'getProtectionLevel' | 'findOrCreateIncident' | 'recordEvent'>;
   correlations: Pick<ExecutionCorrelationStore, 'consumeMatch'>;
   recorder: Pick<SecurityRecorder, 'record'>;
+  firewall: Pick<FirewallService, 'handleBotJoin' | 'handleWebhookUpdate'>;
 }>;
 
 function severityForProtection(level: ProtectionLevel): SecurityLedgerSeverity {
@@ -92,6 +94,12 @@ export class NativeEventService {
       metadata: input.metadata,
       occurredAt: input.occurredAt,
     });
+    if (input.action === 'bot.join' && input.targetType === 'BOT') {
+      await this.dependencies.firewall.handleBotJoin(input.guildId, input.targetId);
+    }
+    if (input.action === 'webhook.update' && input.targetType === 'WEBHOOK') {
+      await this.dependencies.firewall.handleWebhookUpdate(input.guildId, input.targetId);
+    }
     await this.dependencies.recorder.record(
       {
         guildId: input.guildId,

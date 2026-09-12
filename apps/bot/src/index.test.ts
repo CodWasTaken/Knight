@@ -21,6 +21,8 @@ function fakeDiscord() {
     listTextChannels: vi.fn(),
     canSendToChannel: vi.fn(),
     sendChannelMessage: vi.fn(),
+    listChannelWebhooks: vi.fn(),
+    deleteWebhook: vi.fn(),
     fetchRecentMessages: vi.fn(),
     deleteMessages: vi.fn(),
     addRole: vi.fn(),

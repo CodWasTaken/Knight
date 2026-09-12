@@ -26,6 +26,11 @@ export type DiscordMessageState = Readonly<{
   bulkDeletable: boolean;
 }>;
 
+export type DiscordWebhookState = Readonly<{
+  webhookId: string;
+  channelId: string;
+}>;
+
 export type DiscordGuildState = Readonly<{
   guildId: string;
   ownerId: string;
@@ -49,13 +54,25 @@ export interface DiscordActionPort {
   listTextChannels(guildId: string): Promise<readonly DiscordTextChannelState[]>;
   canSendToChannel(guildId: string, channelId: string): Promise<boolean>;
   sendChannelMessage(channelId: string, content: string): Promise<void>;
+  listChannelWebhooks(channelId: string): Promise<readonly DiscordWebhookState[]>;
+  deleteWebhook(webhookId: string, reason: string): Promise<void>;
   fetchRecentMessages(input: {
     channelId: string;
     limit: number;
   }): Promise<readonly DiscordMessageState[]>;
   deleteMessages(input: { channelId: string; messageIds: readonly string[] }): Promise<number>;
-  addRole(input: { guildId: string; userId: string; roleId: string; reason: string }): Promise<void>;
-  removeRole(input: { guildId: string; userId: string; roleId: string; reason: string }): Promise<void>;
+  addRole(input: {
+    guildId: string;
+    userId: string;
+    roleId: string;
+    reason: string;
+  }): Promise<void>;
+  removeRole(input: {
+    guildId: string;
+    userId: string;
+    roleId: string;
+    reason: string;
+  }): Promise<void>;
   getMemberState(guildId: string, userId: string): Promise<DiscordMemberState | null>;
   getGuildState(guildId: string): Promise<DiscordGuildState>;
   setRolePermissions(input: {

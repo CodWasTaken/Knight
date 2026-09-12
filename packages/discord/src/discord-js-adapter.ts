@@ -5,6 +5,7 @@ import type {
   DiscordMemberState,
   DiscordMessageState,
   DiscordTextChannelState,
+  DiscordWebhookState,
 } from './port.js';
 
 const UNKNOWN_MEMBER_ERROR_CODE = 10_007;
@@ -68,9 +69,11 @@ export class DiscordJsAdapter implements DiscordActionPort {
     const guild = await this.fetchGuild(guildId);
     const channels = await guild.channels.fetch();
     return [...channels.values()]
-      .filter((channel) =>
-        channel !== null &&
-        (channel.type === ChannelType.GuildText || channel.type === ChannelType.GuildAnnouncement),
+      .filter(
+        (channel) =>
+          channel !== null &&
+          (channel.type === ChannelType.GuildText ||
+            channel.type === ChannelType.GuildAnnouncement),
       )
       .map((channel) => ({ channelId: channel.id, name: channel.name }));
   }
@@ -86,7 +89,9 @@ export class DiscordJsAdapter implements DiscordActionPort {
     }
     const knight = await guild.members.fetchMe();
     const permissions = channel.permissionsFor(knight);
-    return permissions?.has([PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages]) ?? false;
+    return (
+      permissions?.has([PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages]) ?? false
+    );
   }
 
   public async sendChannelMessage(channelId: string, content: string): Promise<void> {
@@ -95,6 +100,23 @@ export class DiscordJsAdapter implements DiscordActionPort {
       throw new Error(`Discord channel ${channelId} cannot receive text notifications`);
     }
     await channel.send(content);
+  }
+
+  public async listChannelWebhooks(channelId: string): Promise<readonly DiscordWebhookState[]> {
+    const channel = await this.client.channels.fetch(channelId);
+    if (channel === null || !('fetchWebhooks' in channel)) {
+      throw new Error(`Discord channel ${channelId} does not support webhooks`);
+    }
+    const webhooks = await channel.fetchWebhooks();
+    return [...webhooks.values()].map((webhook) => ({
+      webhookId: webhook.id,
+      channelId: webhook.channelId ?? channelId,
+    }));
+  }
+
+  public async deleteWebhook(webhookId: string, reason: string): Promise<void> {
+    const webhook = await this.client.fetchWebhook(webhookId);
+    await webhook.delete(reason);
   }
 
   public async fetchRecentMessages(input: {

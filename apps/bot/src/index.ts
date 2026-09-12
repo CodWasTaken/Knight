@@ -19,6 +19,7 @@ import { Events, MessageFlags, type Client, type Interaction } from 'discord.js'
 import { routeInteraction, type CommandRouterDependencies } from './commands/router.js';
 import { createDiscordClient } from './discord-client.js';
 import { registerCommands } from './register-commands.js';
+import { FirewallService } from './security/firewall-service.js';
 import { installNativeListeners } from './security/install-native-listeners.js';
 import { NativeEventService } from './security/native-event-service.js';
 import { SecurityManagerService } from './security/security-manager-service.js';
@@ -160,14 +161,22 @@ export async function startBot(
   const discord = new DiscordJsAdapter(client);
   const guildRepository = new GuildRepository(database);
   installGuildOwnerSync(client, guildRepository);
+  const nativeSecurity = new SecurityRepository(database);
+  const nativeRecorder = new SecurityRecorder({
+    ledger: new SecurityLedgerRepository(database),
+    discord,
+  });
   installNativeListeners(
     client,
     new NativeEventService({
-      security: new SecurityRepository(database),
+      security: nativeSecurity,
       correlations: new ExecutionCorrelationStore(redis),
-      recorder: new SecurityRecorder({
-        ledger: new SecurityLedgerRepository(database),
+      recorder: nativeRecorder,
+      firewall: new FirewallService({
+        security: nativeSecurity,
         discord,
+        recorder: nativeRecorder,
+        now: () => new Date(),
       }),
     }),
   );

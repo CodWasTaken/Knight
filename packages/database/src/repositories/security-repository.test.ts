@@ -113,6 +113,13 @@ describe('security persistence', () => {
       channelId: 'channel-1',
       trustState: 'APPROVED',
     });
+    expect(await security.getBotInventory('g1', 'bot-1')).toMatchObject({
+      trustState: 'BLOCKED',
+    });
+    expect(await security.getWebhookInventory('g1', 'webhook-1')).toMatchObject({
+      trustState: 'APPROVED',
+    });
+    expect(await security.getBotInventory('g2', 'bot-1')).toBeNull();
   });
 
   it('groups incidents by guild and actor within a five-minute window', async () => {
