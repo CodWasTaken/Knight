@@ -250,4 +250,18 @@ describe('security persistence', () => {
       reason: 'Confirmed compromise',
     });
   });
+  it('remaps only the requested protected resource during recovery', async () => {
+    await security.saveProtection({
+      guildId: 'g1', resourceType: 'ROLE', resourceId: 'old-role',
+      level: ProtectionLevel.Critical, updatedBy: 'owner-1',
+    });
+    await security.remapProtectedResourceForRecovery({
+      guildId: 'g1', resourceType: 'ROLE', oldResourceId: 'old-role',
+      newResourceId: 'new-role', recoveryJobId: 'job-1',
+    });
+    expect(await security.getProtectionLevel('g1', 'ROLE', 'old-role')).toBe(ProtectionLevel.Normal);
+    expect(await security.getProtectionLevel('g1', 'ROLE', 'new-role')).toBe(ProtectionLevel.Critical);
+    expect(await security.getProtectionLevel('g2', 'ROLE', 'new-role')).toBe(ProtectionLevel.Normal);
+  });
+
 });

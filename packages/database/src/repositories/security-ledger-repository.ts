@@ -119,6 +119,44 @@ export class SecurityLedgerRepository {
     return settings ?? null;
   }
 
+  public async remapLoggingChannelForRecovery(input: {
+    guildId: string;
+    oldChannelId: string;
+    newChannelId: string;
+    recoveryJobId: string;
+  }): Promise<LoggingSettingsRecord | null> {
+    return this.database.db.transaction(async (tx) => {
+      const [settings] = await tx
+        .select()
+        .from(guildLoggingSettings)
+        .where(eq(guildLoggingSettings.guildId, input.guildId))
+        .for('update')
+        .limit(1);
+      if (!settings) return null;
+
+      const securityChannelId =
+        settings.securityChannelId === input.oldChannelId ? input.newChannelId : settings.securityChannelId;
+      const moderationChannelId =
+        settings.moderationChannelId === input.oldChannelId ? input.newChannelId : settings.moderationChannelId;
+      if (securityChannelId === settings.securityChannelId && moderationChannelId === settings.moderationChannelId) {
+        return settings;
+      }
+
+      const [updated] = await tx
+        .update(guildLoggingSettings)
+        .set({
+          securityChannelId,
+          moderationChannelId,
+          updatedBy: `RECOVERY:${input.recoveryJobId}`,
+          updatedAt: new Date(),
+        })
+        .where(eq(guildLoggingSettings.guildId, input.guildId))
+        .returning();
+      if (!updated) throw new Error('Failed to remap recovery logging channel');
+      return updated;
+    });
+  }
+
   public async saveLoggingSettings(input: {
     guildId: string;
     securityChannelId: string | null;

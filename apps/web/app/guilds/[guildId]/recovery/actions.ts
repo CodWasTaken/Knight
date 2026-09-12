@@ -36,6 +36,56 @@ function archiveChannelIds(formData: FormData): string[] {
   return [...new Set(ids)];
 }
 
+export async function requestRestorePreviewAction(formData: FormData): Promise<void> {
+  const session = await auth();
+  if (!session?.user?.id) redirect('/');
+  const guildId = requiredString(formData, 'guildId');
+  const backupId = requiredString(formData, 'backupId');
+  const runtime = getWebRuntime();
+  await requireGuildAccess(guildId, session, runtime.repositories);
+
+  const backup = await runtime.repositories.backups.getBackup(guildId, backupId);
+  if (
+    backup === null || backup.status !== 'COMPLETED' ||
+    backup.relativePath === null || backup.sha256 === null
+  ) {
+    throw new Error('Restore preview requires a completed backup with integrity metadata.');
+  }
+  await runtime.repositories.backups.enqueueRestorePreview({
+    guildId, backupId, requestedBy: session.user.id,
+  });
+  revalidatePath(`/guilds/${guildId}/recovery`);
+}
+
+export async function confirmRestoreAction(formData: FormData): Promise<void> {
+  const session = await auth();
+  if (!session?.user?.id) redirect('/');
+  const guildId = requiredString(formData, 'guildId');
+  const jobId = requiredString(formData, 'jobId');
+  const runtime = getWebRuntime();
+  const role = await requireGuildAccess(guildId, session, runtime.repositories);
+  if (role !== 'OWNER') throw new Error('Recovery execution requires the Discord guild owner.');
+  if (formData.get('confirmRestore') !== 'CONFIRM') {
+    throw new Error('Recovery execution requires explicit confirmation.');
+  }
+  await runtime.repositories.backups.confirmRestore({
+    guildId, jobId, confirmedBy: session.user.id,
+  });
+  revalidatePath(`/guilds/${guildId}/recovery`);
+}
+
+export async function retryRestoreAction(formData: FormData): Promise<void> {
+  const session = await auth();
+  if (!session?.user?.id) redirect('/');
+  const guildId = requiredString(formData, 'guildId');
+  const jobId = requiredString(formData, 'jobId');
+  const runtime = getWebRuntime();
+  const role = await requireGuildAccess(guildId, session, runtime.repositories);
+  if (role !== 'OWNER') throw new Error('Recovery retry requires the Discord guild owner.');
+  await runtime.repositories.backups.retryRestore({ guildId, jobId });
+  revalidatePath(`/guilds/${guildId}/recovery`);
+}
+
 export async function queueBackupNowAction(formData: FormData): Promise<void> {
   const session = await auth();
   if (!session?.user?.id) redirect('/');

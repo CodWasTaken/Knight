@@ -22,10 +22,13 @@ describe('startWorker', () => {
     let intervalHandler: (() => void) | undefined;
     let sigterm: (() => void) | undefined;
 
+    const database = { pool: { query, end } };
+    const redis = { ping, quit };
+    const createBackupService = vi.fn(() => ({ runTick }));
     await startWorker(validEnv, {
-      createDatabase: vi.fn(() => ({ pool: { query, end } })),
-      createRedis: vi.fn(() => ({ ping, quit })),
-      createBackupService: vi.fn(() => ({ runTick })),
+      createDatabase: vi.fn(() => database),
+      createRedis: vi.fn(() => redis),
+      createBackupService,
       setInterval: vi.fn((handler, milliseconds) => {
         expect(milliseconds).toBe(60_000);
         intervalHandler = handler;
@@ -39,6 +42,7 @@ describe('startWorker', () => {
 
     expect(query).toHaveBeenCalledWith('select 1');
     expect(ping).toHaveBeenCalledTimes(1);
+    expect(createBackupService).toHaveBeenCalledWith({ database, redis, env: expect.any(Object) });
     expect(intervalHandler).toBeTypeOf('function');
     intervalHandler?.();
     await vi.waitFor(() => expect(runTick).toHaveBeenCalledTimes(1));

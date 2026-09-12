@@ -311,4 +311,49 @@ export class BackupRepository {
       .limit(1);
     return record ?? null;
   }
+
+  public async getRecoveryJobById(jobId: string): Promise<RecoveryJobRecord | null> {
+    const [record] = await this.database.db
+      .select()
+      .from(recoveryJobs)
+      .where(eq(recoveryJobs.id, jobId))
+      .limit(1);
+    return record ?? null;
+  }
+
+  public async retryRestore(input: { guildId: string; jobId: string }): Promise<RecoveryJobRecord> {
+    const now = new Date();
+    const [record] = await this.database.db
+      .update(recoveryJobs)
+      .set({ status: 'PENDING', error: null, startedAt: null, completedAt: null, updatedAt: now })
+      .where(
+        and(
+          eq(recoveryJobs.guildId, input.guildId),
+          eq(recoveryJobs.id, input.jobId),
+          eq(recoveryJobs.phase, 'EXECUTION'),
+          eq(recoveryJobs.status, 'FAILED'),
+        ),
+      )
+      .returning();
+    if (!record) throw new Error('Failed recovery execution is not retryable');
+    return record;
+  }
+
+  public async completeRestore(input: { guildId: string; jobId: string }): Promise<RecoveryJobRecord> {
+    const now = new Date();
+    const [record] = await this.database.db
+      .update(recoveryJobs)
+      .set({ status: 'COMPLETED', error: null, completedAt: now, updatedAt: now })
+      .where(
+        and(
+          eq(recoveryJobs.guildId, input.guildId),
+          eq(recoveryJobs.id, input.jobId),
+          eq(recoveryJobs.phase, 'EXECUTION'),
+          eq(recoveryJobs.status, 'RUNNING'),
+        ),
+      )
+      .returning();
+    if (!record) throw new Error('Recovery execution is not running');
+    return record;
+  }
 }

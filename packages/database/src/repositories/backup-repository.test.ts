@@ -201,4 +201,28 @@ describe('backup persistence', () => {
       error: 'Discord write failed',
     });
   });
+  it('retries failed execution from its durable checkpoint and marks completion', async () => {
+    const backup = await backups.enqueueBackup({ guildId: 'g1', requestedBy: 'owner-1' });
+    await backups.completeBackup({
+      guildId: 'g1', backupId: backup.id, relativePath: 'g1/retry.json.gz', sha256: '9'.repeat(64),
+    });
+    const job = await backups.enqueueRestorePreview({ guildId: 'g1', backupId: backup.id, requestedBy: 'owner-1' });
+    await backups.claimPendingRestore();
+    await backups.saveRestorePreview({ guildId: 'g1', jobId: job.id, preview: { operations: [] } });
+    await backups.confirmRestore({ guildId: 'g1', jobId: job.id, confirmedBy: 'owner-1' });
+    await backups.claimPendingRestore();
+    const checkpoint = { nextOperationIndex: 4, roleIdMap: { old: 'new' }, channelIdMap: {} };
+    await backups.updateRestoreCheckpoint({ guildId: 'g1', jobId: job.id, checkpoint });
+    await backups.failRestore({ guildId: 'g1', jobId: job.id, error: 'write failed' });
+
+    expect(await backups.getRecoveryJobById(job.id)).toMatchObject({ guildId: 'g1', status: 'FAILED' });
+    await backups.retryRestore({ guildId: 'g1', jobId: job.id });
+    expect(await backups.getRecoveryJob('g1', job.id)).toMatchObject({
+      phase: 'EXECUTION', status: 'PENDING', confirmedBy: 'owner-1', checkpoint, error: null,
+    });
+    await backups.claimPendingRestore();
+    await backups.completeRestore({ guildId: 'g1', jobId: job.id });
+    expect(await backups.getRecoveryJob('g1', job.id)).toMatchObject({ status: 'COMPLETED', error: null });
+  });
+
 });

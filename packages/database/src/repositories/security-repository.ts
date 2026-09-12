@@ -185,6 +185,31 @@ export class SecurityRepository {
     return record;
   }
 
+  public async remapProtectedResourceForRecovery(input: {
+    guildId: string;
+    resourceType: SecurityResourceType;
+    oldResourceId: string;
+    newResourceId: string;
+    recoveryJobId: string;
+  }): Promise<ProtectedResourceRecord | null> {
+    const [record] = await this.database.db
+      .update(protectedResources)
+      .set({
+        resourceId: input.newResourceId,
+        updatedBy: `RECOVERY:${input.recoveryJobId}`,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(protectedResources.guildId, input.guildId),
+          eq(protectedResources.resourceType, input.resourceType),
+          eq(protectedResources.resourceId, input.oldResourceId),
+        ),
+      )
+      .returning();
+    return record ?? null;
+  }
+
   public async removeProtection(
     guildId: string,
     resourceType: SecurityResourceType,

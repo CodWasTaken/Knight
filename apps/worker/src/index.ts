@@ -8,9 +8,10 @@ import {
   StaffRepository,
 } from '@knight/database';
 import { createDiscordRestStructureAdapter } from '@knight/discord';
-import { createRedis } from '@knight/redis';
+import { createRedis, LockStore } from '@knight/redis';
 import { BackupService } from './backups/backup-service.js';
 import { LocalBackupStorage } from './backups/local-backup-storage.js';
+import { RestoreService } from './backups/restore-service.js';
 
 type WorkerDatabase = {
   pool: {
@@ -29,7 +30,7 @@ type ParsedEnv = ReturnType<typeof parseEnv>;
 export type WorkerDependencies = Readonly<{
   createDatabase(url: string): WorkerDatabase;
   createRedis(url: string): WorkerRedis;
-  createBackupService(input: { database: WorkerDatabase; env: ParsedEnv }): WorkerBackupService;
+  createBackupService(input: { database: WorkerDatabase; redis: WorkerRedis; env: ParsedEnv }): WorkerBackupService;
   setInterval(handler: () => void, milliseconds: number): unknown;
   clearInterval(timer: unknown): void;
   onSigterm(handler: () => void): void;
@@ -37,16 +38,22 @@ export type WorkerDependencies = Readonly<{
 
 function createDefaultBackupService(input: {
   database: WorkerDatabase;
+  redis: WorkerRedis;
   env: ParsedEnv;
 }): WorkerBackupService {
   const database = input.database as ReturnType<typeof createDatabase>;
+  const backups = new BackupRepository(database);
+  const discord = createDiscordRestStructureAdapter(input.env.DISCORD_TOKEN);
+  const staff = new StaffRepository(database);
+  const ledger = new SecurityLedgerRepository(database);
+  const security = new SecurityRepository(database);
+  const storage = new LocalBackupStorage(input.env.KNIGHT_BACKUP_DIR);
+  const restore = new RestoreService({
+    backups, discord, staff, ledger, security, storage,
+    locks: new LockStore(input.redis as ReturnType<typeof createRedis>),
+  });
   return new BackupService({
-    backups: new BackupRepository(database),
-    discord: createDiscordRestStructureAdapter(input.env.DISCORD_TOKEN),
-    staff: new StaffRepository(database),
-    ledger: new SecurityLedgerRepository(database),
-    security: new SecurityRepository(database),
-    storage: new LocalBackupStorage(input.env.KNIGHT_BACKUP_DIR),
+    backups, discord, staff, ledger, security, storage, restore,
     archiveEnabled: input.env.ENABLE_MESSAGE_CONTENT_ARCHIVE,
     now: () => new Date(),
   });
@@ -87,7 +94,7 @@ export async function startWorker(
     throw error;
   }
 
-  const backupService = dependencies.createBackupService({ database, env });
+  const backupService = dependencies.createBackupService({ database, redis, env });
   const tick = (): void => {
     if (closed || activeTick !== null) return;
     const promise = backupService

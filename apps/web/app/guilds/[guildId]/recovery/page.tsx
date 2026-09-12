@@ -1,9 +1,25 @@
 import { getWebDiscordAdapter } from '../../../../lib/discord-runtime';
 import { getWebRuntime } from '../../../../lib/server-runtime';
-import { queueBackupNowAction, saveBackupPolicyAction } from './actions';
+import {
+  confirmRestoreAction, queueBackupNowAction, requestRestorePreviewAction,
+  retryRestoreAction, saveBackupPolicyAction,
+} from './actions';
 
 function formatDate(value: Date | null): string {
   return value === null ? '—' : value.toISOString();
+}
+
+function previewOperations(value: Record<string, unknown> | null): readonly {
+  kind: string;
+  classification: string;
+}[] {
+  if (value === null || !Array.isArray(value.operations)) return [];
+  return value.operations.flatMap((operation) => {
+    if (operation === null || typeof operation !== 'object') return [];
+    const item = operation as Record<string, unknown>;
+    if (typeof item.kind !== 'string' || typeof item.classification !== 'string') return [];
+    return [{ kind: item.kind, classification: item.classification }];
+  });
 }
 
 export default async function RecoveryPage({
@@ -102,7 +118,7 @@ export default async function RecoveryPage({
         ) : (
           <div className="tableWrap">
             <table>
-              <thead><tr><th>ID</th><th>Status</th><th>Created</th><th>Completed</th><th>Integrity</th></tr></thead>
+              <thead><tr><th>ID</th><th>Status</th><th>Created</th><th>Completed</th><th>Integrity</th><th>Recovery</th></tr></thead>
               <tbody>
                 {backups.map((backup) => (
                   <tr key={backup.id}>
@@ -111,6 +127,15 @@ export default async function RecoveryPage({
                     <td>{backup.createdAt.toISOString()}</td>
                     <td>{formatDate(backup.completedAt)}</td>
                     <td>{backup.sha256 === null ? '—' : <code>{backup.sha256.slice(0, 16)}…</code>}</td>
+                    <td>
+                      {backup.status === 'COMPLETED' && backup.sha256 !== null ? (
+                        <form action={requestRestorePreviewAction}>
+                          <input name="guildId" type="hidden" value={guildId} />
+                          <input name="backupId" type="hidden" value={backup.id} />
+                          <button type="submit">Preview restore</button>
+                        </form>
+                      ) : '—'}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -126,7 +151,7 @@ export default async function RecoveryPage({
         ) : (
           <div className="tableWrap">
             <table>
-              <thead><tr><th>ID</th><th>Backup</th><th>Phase</th><th>Status</th><th>Updated</th></tr></thead>
+              <thead><tr><th>ID</th><th>Backup</th><th>Phase</th><th>Status</th><th>Preview</th><th>Updated</th><th>Action</th></tr></thead>
               <tbody>
                 {recoveryJobs.map((job) => (
                   <tr key={job.id}>
@@ -134,7 +159,37 @@ export default async function RecoveryPage({
                     <td><code>{job.backupId}</code></td>
                     <td>{job.phase}</td>
                     <td>{job.status}</td>
+                    <td>
+                      {previewOperations(job.preview).length === 0 ? '—' : (
+                        <ul>
+                          {previewOperations(job.preview).map((operation, index) => (
+                            <li key={`${job.id}-${index}`}>
+                              <code>{operation.classification}</code> {operation.kind}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </td>
                     <td>{job.updatedAt.toISOString()}</td>
+                    <td>
+                      {job.phase === 'PREVIEW' && job.status === 'PREVIEW_READY' ? (
+                        <form action={confirmRestoreAction}>
+                          <input name="guildId" type="hidden" value={guildId} />
+                          <input name="jobId" type="hidden" value={job.id} />
+                          <label>
+                            <input name="confirmRestore" required type="checkbox" value="CONFIRM" />
+                            <span>I understand recreated Discord resources receive new IDs.</span>
+                          </label>
+                          <button type="submit">Confirm restore (owner only)</button>
+                        </form>
+                      ) : job.phase === 'EXECUTION' && job.status === 'FAILED' ? (
+                        <form action={retryRestoreAction}>
+                          <input name="guildId" type="hidden" value={guildId} />
+                          <input name="jobId" type="hidden" value={job.id} />
+                          <button type="submit">Retry from checkpoint (owner only)</button>
+                        </form>
+                      ) : '—'}
+                    </td>
                   </tr>
                 ))}
               </tbody>

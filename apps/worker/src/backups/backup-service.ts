@@ -54,6 +54,7 @@ type BackupDependencies = Readonly<{
       sha256: string;
     }>;
   };
+  restore: { processNextPendingRestore(): Promise<boolean> };
   archiveEnabled: boolean;
   now(): Date;
 }>;
@@ -158,5 +159,6 @@ export class BackupService {
   public async runTick(now: Date): Promise<void> {
     await this.runDueDaily(now);
     await this.processNextPendingBackup();
+    await this.dependencies.restore.processNextPendingRestore();
   }
 }

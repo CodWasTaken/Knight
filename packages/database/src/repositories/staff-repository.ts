@@ -448,6 +448,65 @@ export class StaffRepository {
     return profile ?? null;
   }
 
+  public async remapDiscordRoleForRecovery(input: {
+    guildId: string;
+    profileId: string;
+    oldDiscordRoleId: string;
+    newDiscordRoleId: string;
+    recoveryJobId: string;
+  }): Promise<{ profile: StaffProfileRecord; version: StaffProfileVersionRecord }> {
+    return this.database.db.transaction(async (tx) => {
+      const [profile] = await tx
+        .select()
+        .from(staffProfiles)
+        .where(
+          and(
+            eq(staffProfiles.guildId, input.guildId),
+            eq(staffProfiles.id, input.profileId),
+            eq(staffProfiles.discordRoleId, input.oldDiscordRoleId),
+          ),
+        )
+        .for('update')
+        .limit(1);
+      if (!profile || profile.currentVersionId === null) {
+        throw new Error('Staff profile recovery reference no longer matches');
+      }
+
+      const [current] = await tx
+        .select()
+        .from(staffProfileVersions)
+        .where(
+          and(
+            eq(staffProfileVersions.guildId, input.guildId),
+            eq(staffProfileVersions.profileId, input.profileId),
+            eq(staffProfileVersions.id, profile.currentVersionId),
+          ),
+        )
+        .limit(1);
+      if (!current) throw new Error('Current Staff Profile version not found');
+
+      const [latest] = await tx
+        .select({ version: staffProfileVersions.version })
+        .from(staffProfileVersions)
+        .where(and(eq(staffProfileVersions.guildId, input.guildId), eq(staffProfileVersions.profileId, input.profileId)))
+        .orderBy(desc(staffProfileVersions.version))
+        .limit(1);
+      const [version] = await tx.insert(staffProfileVersions).values({
+        guildId: input.guildId, profileId: input.profileId, version: (latest?.version ?? 0) + 1,
+        profileName: profile.name, discordRoleId: input.newDiscordRoleId, rank: profile.rank,
+        permissions: [...current.permissions], actionPolicies: current.actionPolicies,
+        createdBy: `RECOVERY:${input.recoveryJobId}`,
+      }).returning();
+      if (!version) throw new Error('Failed to create recovery Staff Profile version');
+
+      const [updated] = await tx.update(staffProfiles).set({
+        discordRoleId: input.newDiscordRoleId, currentVersionId: version.id, updatedAt: new Date(),
+      }).where(and(eq(staffProfiles.guildId, input.guildId), eq(staffProfiles.id, input.profileId))).returning();
+      if (!updated) throw new Error('Failed to remap Staff Profile role');
+      return { profile: updated, version };
+    });
+  }
+
   public async listProfiles(guildId: string): Promise<StaffProfileRecord[]> {
     return this.database.db
       .select({

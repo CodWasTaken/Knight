@@ -16,7 +16,10 @@ vi.mock('../../../../lib/discord-runtime', () => ({ getWebDiscordAdapter: mocks.
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }));
 vi.mock('next/navigation', () => ({ redirect: mocks.redirect }));
 
-import { queueBackupNowAction, saveBackupPolicyAction } from './actions';
+import {
+  confirmRestoreAction, queueBackupNowAction, requestRestorePreviewAction,
+  retryRestoreAction, saveBackupPolicyAction,
+} from './actions';
 
 function policyData(values: {
   mode?: string;
@@ -34,9 +37,18 @@ function policyData(values: {
 function setup(archiveEnabled = false) {
   const savePolicy = vi.fn().mockResolvedValue({});
   const enqueueBackup = vi.fn().mockResolvedValue({ id: 'backup-now', status: 'PENDING' });
+  const getBackup = vi.fn().mockResolvedValue({
+    id: 'backup-1', guildId: '100', status: 'COMPLETED',
+    relativePath: '100/backup-1.json.gz', sha256: 'a'.repeat(64),
+  });
+  const enqueueRestorePreview = vi.fn().mockResolvedValue({ id: 'job-1', status: 'PENDING' });
+  const confirmRestore = vi.fn().mockResolvedValue({ id: 'job-1', status: 'PENDING' });
+  const retryRestore = vi.fn().mockResolvedValue({ id: 'job-1', status: 'PENDING' });
   const repositories = {
     guilds: {}, managers: {}, staff: {}, security: {}, securityLedger: {},
-    backups: { savePolicy, enqueueBackup },
+    backups: {
+      savePolicy, enqueueBackup, getBackup, enqueueRestorePreview, confirmRestore, retryRestore,
+    },
   };
   const discord = {
     listTextChannels: vi.fn().mockResolvedValue([
@@ -51,11 +63,75 @@ function setup(archiveEnabled = false) {
     repositories,
   });
   mocks.getWebDiscordAdapter.mockReturnValue(discord);
-  return { repositories, savePolicy, enqueueBackup, discord };
+  return {
+    repositories, savePolicy, enqueueBackup, getBackup, enqueueRestorePreview,
+    confirmRestore, retryRestore, discord,
+  };
 }
 
 describe('recovery backup policy actions', () => {
   beforeEach(() => vi.clearAllMocks());
+
+  it('queues a restore preview for an authorized manager only from a completed verified backup', async () => {
+    const made = setup();
+    const form = new FormData();
+    form.set('guildId', '100');
+    form.set('backupId', 'backup-1');
+
+    await requestRestorePreviewAction(form);
+
+    expect(made.getBackup).toHaveBeenCalledWith('100', 'backup-1');
+    expect(made.enqueueRestorePreview).toHaveBeenCalledWith({
+      guildId: '100', backupId: 'backup-1', requestedBy: 'session-user',
+    });
+    expect(mocks.revalidatePath).toHaveBeenCalledWith('/guilds/100/recovery');
+
+    made.getBackup.mockResolvedValueOnce({ id: 'backup-2', status: 'FAILED', relativePath: null, sha256: null });
+    form.set('backupId', 'backup-2');
+    await expect(requestRestorePreviewAction(form)).rejects.toThrow('completed backup');
+  });
+
+  it('requires explicit owner confirmation before queuing restore execution', async () => {
+    const made = setup();
+    const form = new FormData();
+    form.set('guildId', '100');
+    form.set('jobId', 'job-1');
+    form.set('confirmRestore', 'CONFIRM');
+
+    await expect(confirmRestoreAction(form)).rejects.toThrow('guild owner');
+    expect(made.confirmRestore).not.toHaveBeenCalled();
+
+    mocks.requireGuildAccess.mockResolvedValueOnce('OWNER');
+    await confirmRestoreAction(form);
+    expect(made.confirmRestore).toHaveBeenCalledWith({
+      guildId: '100', jobId: 'job-1', confirmedBy: 'session-user',
+    });
+  });
+
+  it('rejects restore confirmation when the explicit checkbox is absent', async () => {
+    const made = setup();
+    mocks.requireGuildAccess.mockResolvedValueOnce('OWNER');
+    const form = new FormData();
+    form.set('guildId', '100');
+    form.set('jobId', 'job-1');
+
+    await expect(confirmRestoreAction(form)).rejects.toThrow('explicit confirmation');
+    expect(made.confirmRestore).not.toHaveBeenCalled();
+  });
+
+  it('allows only the guild owner to retry a failed restore from its checkpoint', async () => {
+    const made = setup();
+    const form = new FormData();
+    form.set('guildId', '100');
+    form.set('jobId', 'job-1');
+
+    await expect(retryRestoreAction(form)).rejects.toThrow('guild owner');
+    expect(made.retryRestore).not.toHaveBeenCalled();
+
+    mocks.requireGuildAccess.mockResolvedValueOnce('OWNER');
+    await retryRestoreAction(form);
+    expect(made.retryRestore).toHaveBeenCalledWith({ guildId: '100', jobId: 'job-1' });
+  });
 
   it('queues a manual backup for an authorized principal without running it inline', async () => {
     const { repositories, enqueueBackup } = setup();

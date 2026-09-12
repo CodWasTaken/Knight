@@ -39,6 +39,7 @@ function makeService(options: { archiveEnabled?: boolean; policy?: unknown; capt
   const storage = {
     write: vi.fn().mockResolvedValue({ relativePath: '100/backup-1.json.gz', sha256: 'a'.repeat(64) }),
   };
+  const restore = { processNextPendingRestore: vi.fn().mockResolvedValue(false) };
   return {
     service: new BackupService({
       backups,
@@ -47,6 +48,7 @@ function makeService(options: { archiveEnabled?: boolean; policy?: unknown; capt
       ledger,
       security,
       storage,
+      restore,
       archiveEnabled: options.archiveEnabled ?? false,
       now: () => new Date('2026-09-12T12:00:00.000Z'),
     }),
@@ -54,6 +56,7 @@ function makeService(options: { archiveEnabled?: boolean; policy?: unknown; capt
     discord,
     storage,
     security,
+    restore,
   };
 }
 
@@ -158,6 +161,16 @@ describe('BackupService', () => {
       backupId: 'backup-1',
       error: 'Discord unavailable',
     });
+  });
+
+
+  it('processes one pending recovery after backup work in each tick', async () => {
+    const made = makeService();
+    const now = new Date('2026-09-12T12:00:00.000Z');
+
+    await made.service.runTick(now);
+
+    expect(made.restore.processNextPendingRestore).toHaveBeenCalledTimes(1);
   });
 
   it('returns false when there is no pending backup', async () => {

@@ -85,4 +85,19 @@ describe('security ledger persistence', () => {
       moderationChannelId: 'moderation-channel',
     });
   });
+  it('remaps only matching logging channel references during recovery', async () => {
+    await ledger.saveLoggingSettings({
+      guildId: 'g1', securityChannelId: 'old-security',
+      moderationChannelId: 'keep-moderation', updatedBy: 'owner-1',
+    });
+    await ledger.remapLoggingChannelForRecovery({
+      guildId: 'g1', oldChannelId: 'old-security', newChannelId: 'new-security',
+      recoveryJobId: 'job-1',
+    });
+    expect(await ledger.getLoggingSettings('g1')).toMatchObject({
+      securityChannelId: 'new-security', moderationChannelId: 'keep-moderation',
+      updatedBy: 'RECOVERY:job-1',
+    });
+  });
+
 });

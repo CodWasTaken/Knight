@@ -328,4 +328,22 @@ describe('security persistence', () => {
     });
     expect(created.version.permissions).toEqual(['member.ban']);
   });
+  it('remaps a recovered Discord role by creating a new immutable Staff Profile version', async () => {
+    const created = await staff.createProfileWithInitialVersion({
+      guildId: '100', name: 'Recovery Staff', discordRoleId: 'old-role', rank: 15,
+      permissions: ['member.ban'], actionPolicies: {}, createdBy: '1',
+    });
+
+    const recovered = await staff.remapDiscordRoleForRecovery({
+      guildId: '100', profileId: created.profile.id, oldDiscordRoleId: 'old-role',
+      newDiscordRoleId: 'new-role', recoveryJobId: 'job-1',
+    });
+
+    expect(recovered.version).toMatchObject({
+      version: 2, discordRoleId: 'new-role', permissions: ['member.ban'],
+    });
+    expect(recovered.profile).toMatchObject({ discordRoleId: 'new-role', currentVersionId: recovered.version.id });
+    expect(created.version).toMatchObject({ version: 1, discordRoleId: 'old-role' });
+  });
+
 });
