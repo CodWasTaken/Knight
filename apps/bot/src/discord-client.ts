@@ -7,6 +7,12 @@ export const KNIGHT_GATEWAY_INTENTS = [
   GatewayIntentBits.GuildWebhooks,
 ] as const;
 
-export function createDiscordClient(): Client {
-  return new Client({ intents: KNIGHT_GATEWAY_INTENTS });
+export function gatewayIntentsForArchive(enableMessageArchive: boolean): readonly GatewayIntentBits[] {
+  return enableMessageArchive
+    ? [...KNIGHT_GATEWAY_INTENTS, GatewayIntentBits.MessageContent]
+    : KNIGHT_GATEWAY_INTENTS;
+}
+
+export function createDiscordClient(enableMessageArchive = false): Client {
+  return new Client({ intents: gatewayIntentsForArchive(enableMessageArchive) });
 }

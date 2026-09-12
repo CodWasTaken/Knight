@@ -69,3 +69,37 @@ export type ArchivedMessageEvidence = Readonly<{
   content: string;
   attachments: readonly ArchivedMessageAttachment[];
 }>;
+export type KnightStaffProfileRecoveryReference = Readonly<{
+  profileId: string;
+  discordRoleId: string;
+  profileVersionId: string | null;
+}>;
+
+export type KnightLoggingRecoveryReference = Readonly<{
+  securityChannelId: string | null;
+  moderationChannelId: string | null;
+}>;
+
+export type KnightProtectedResourceRecoveryReference = Readonly<{
+  resourceType: 'USER' | 'ROLE' | 'CHANNEL';
+  resourceId: string;
+  level: 'IMPORTANT' | 'CRITICAL' | 'IMMUTABLE';
+}>;
+
+export type ArchivedChannelEvidence = Readonly<{
+  channelId: string;
+  messages: readonly ArchivedMessageEvidence[];
+}>;
+
+export type StructuralBackupPayload = Readonly<{
+  version: 1;
+  guildId: string;
+  createdAt: string;
+  discord: DiscordStructuralSnapshot;
+  knight: Readonly<{
+    staffProfiles: readonly KnightStaffProfileRecoveryReference[];
+    logging: KnightLoggingRecoveryReference | null;
+    protectedResources: readonly KnightProtectedResourceRecoveryReference[];
+  }>;
+  messageArchives: readonly ArchivedChannelEvidence[];
+}>;

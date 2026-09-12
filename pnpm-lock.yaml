@@ -279,9 +279,15 @@ importers:
       '@knight/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@knight/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@knight/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@knight/discord':
+        specifier: workspace:*
+        version: link:../../packages/discord
       '@knight/redis':
         specifier: workspace:*
         version: link:../../packages/redis

@@ -166,7 +166,7 @@ export async function startBot(
   envInput: Record<string, string | undefined> = process.env,
 ): Promise<Client> {
   const env = parseEnv(envInput);
-  const client = createDiscordClient();
+  const client = createDiscordClient(env.ENABLE_MESSAGE_CONTENT_ARCHIVE);
   const database = createDatabase(env.DATABASE_URL);
   const redis = createRedis(env.REDIS_URL);
   const discord = new DiscordJsAdapter(client);

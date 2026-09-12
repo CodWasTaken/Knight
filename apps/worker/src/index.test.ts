@@ -12,16 +12,26 @@ const validEnv = {
 };
 
 describe('startWorker', () => {
-  it('checks PostgreSQL and Redis before registering graceful SIGTERM shutdown', async () => {
+  it('checks dependencies, polls backups sequentially every minute, and stops cleanly', async () => {
     const query = vi.fn().mockResolvedValue({ rows: [{ ok: 1 }] });
     const end = vi.fn().mockResolvedValue(undefined);
     const ping = vi.fn().mockResolvedValue('PONG');
     const quit = vi.fn().mockResolvedValue('OK');
+    const runTick = vi.fn().mockResolvedValue(undefined);
+    const clearInterval = vi.fn();
+    let intervalHandler: (() => void) | undefined;
     let sigterm: (() => void) | undefined;
 
     await startWorker(validEnv, {
       createDatabase: vi.fn(() => ({ pool: { query, end } })),
       createRedis: vi.fn(() => ({ ping, quit })),
+      createBackupService: vi.fn(() => ({ runTick })),
+      setInterval: vi.fn((handler, milliseconds) => {
+        expect(milliseconds).toBe(60_000);
+        intervalHandler = handler;
+        return 'timer';
+      }),
+      clearInterval,
       onSigterm: vi.fn((handler) => {
         sigterm = handler;
       }),
@@ -29,10 +39,13 @@ describe('startWorker', () => {
 
     expect(query).toHaveBeenCalledWith('select 1');
     expect(ping).toHaveBeenCalledTimes(1);
-    expect(sigterm).toBeTypeOf('function');
+    expect(intervalHandler).toBeTypeOf('function');
+    intervalHandler?.();
+    await vi.waitFor(() => expect(runTick).toHaveBeenCalledTimes(1));
 
     sigterm?.();
     await vi.waitFor(() => {
+      expect(clearInterval).toHaveBeenCalledWith('timer');
       expect(end).toHaveBeenCalledTimes(1);
       expect(quit).toHaveBeenCalledTimes(1);
     });

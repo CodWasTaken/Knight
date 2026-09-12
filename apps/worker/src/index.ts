@@ -1,25 +1,62 @@
 import { pathToFileURL } from 'node:url';
 import { parseEnv } from '@knight/config';
-import { createDatabase } from '@knight/database/client';
+import {
+  BackupRepository,
+  createDatabase,
+  SecurityLedgerRepository,
+  SecurityRepository,
+  StaffRepository,
+} from '@knight/database';
+import { createDiscordRestStructureAdapter } from '@knight/discord';
 import { createRedis } from '@knight/redis';
+import { BackupService } from './backups/backup-service.js';
+import { LocalBackupStorage } from './backups/local-backup-storage.js';
+
+type WorkerDatabase = {
+  pool: {
+    query(sql: string): Promise<unknown>;
+    end(): Promise<void>;
+  };
+};
+
+type WorkerRedis = {
+  ping(): Promise<string>;
+  quit(): Promise<unknown>;
+};
+type WorkerBackupService = { runTick(now: Date): Promise<void> };
+type ParsedEnv = ReturnType<typeof parseEnv>;
 
 export type WorkerDependencies = Readonly<{
-  createDatabase(url: string): {
-    pool: {
-      query(sql: string): Promise<unknown>;
-      end(): Promise<void>;
-    };
-  };
-  createRedis(url: string): {
-    ping(): Promise<string>;
-    quit(): Promise<unknown>;
-  };
+  createDatabase(url: string): WorkerDatabase;
+  createRedis(url: string): WorkerRedis;
+  createBackupService(input: { database: WorkerDatabase; env: ParsedEnv }): WorkerBackupService;
+  setInterval(handler: () => void, milliseconds: number): unknown;
+  clearInterval(timer: unknown): void;
   onSigterm(handler: () => void): void;
 }>;
 
+function createDefaultBackupService(input: {
+  database: WorkerDatabase;
+  env: ParsedEnv;
+}): WorkerBackupService {
+  const database = input.database as ReturnType<typeof createDatabase>;
+  return new BackupService({
+    backups: new BackupRepository(database),
+    discord: createDiscordRestStructureAdapter(input.env.DISCORD_TOKEN),
+    staff: new StaffRepository(database),
+    ledger: new SecurityLedgerRepository(database),
+    security: new SecurityRepository(database),
+    storage: new LocalBackupStorage(input.env.KNIGHT_BACKUP_DIR),
+    archiveEnabled: input.env.ENABLE_MESSAGE_CONTENT_ARCHIVE,
+    now: () => new Date(),
+  });
+}
 const defaultDependencies: WorkerDependencies = {
   createDatabase,
   createRedis,
+  createBackupService: createDefaultBackupService,
+  setInterval: (handler, milliseconds) => setInterval(handler, milliseconds),
+  clearInterval: (timer) => clearInterval(timer as NodeJS.Timeout),
   onSigterm: (handler) => process.once('SIGTERM', handler),
 };
 
@@ -31,10 +68,14 @@ export async function startWorker(
   const database = dependencies.createDatabase(env.DATABASE_URL);
   const redis = dependencies.createRedis(env.REDIS_URL);
   let closed = false;
+  let timer: unknown | null = null;
+  let activeTick: Promise<void> | null = null;
 
   const shutdown = async (): Promise<void> => {
     if (closed) return;
     closed = true;
+    if (timer !== null) dependencies.clearInterval(timer);
+    await activeTick;
     await Promise.allSettled([database.pool.end(), redis.quit()]);
   };
 
@@ -45,6 +86,21 @@ export async function startWorker(
     await shutdown();
     throw error;
   }
+
+  const backupService = dependencies.createBackupService({ database, env });
+  const tick = (): void => {
+    if (closed || activeTick !== null) return;
+    const promise = backupService
+      .runTick(new Date())
+      .catch(() => {
+        console.error('Knight backup worker tick failed safely.');
+      })
+      .finally(() => {
+        if (activeTick === promise) activeTick = null;
+      });
+    activeTick = promise;
+  };
+  timer = dependencies.setInterval(tick, 60_000);
 
   dependencies.onSigterm(() => {
     void shutdown();

@@ -45,4 +45,30 @@ describe('parseEnv', () => {
     });
     expect(env.DISCORD_TOKEN).toBe('setup-token');
   });
+  it('defaults local backup storage and message archival to safe local settings', () => {
+    const env = parseEnv({
+      DISCORD_TOKEN: 'token',
+      DISCORD_CLIENT_ID: '123',
+      DISCORD_CLIENT_SECRET: 'secret',
+      AUTH_SECRET: 'x'.repeat(32),
+      APP_URL: 'http://localhost:3000',
+      DATABASE_URL: 'postgres://knight:knight@localhost:5432/knight',
+      REDIS_URL: 'redis://localhost:6379',
+    });
+
+    expect(env.ENABLE_MESSAGE_CONTENT_ARCHIVE).toBe(false);
+    expect(env.KNIGHT_BACKUP_DIR).toBe('/data/knight-backups');
+  });
+
+  it('parses explicit archive opt-in without treating arbitrary text as true', () => {
+    const base = {
+      DISCORD_TOKEN: 'token', DISCORD_CLIENT_ID: '123', DISCORD_CLIENT_SECRET: 'secret',
+      AUTH_SECRET: 'x'.repeat(32), APP_URL: 'http://localhost:3000',
+      DATABASE_URL: 'postgres://knight:knight@localhost:5432/knight', REDIS_URL: 'redis://localhost:6379',
+    };
+    expect(parseEnv({ ...base, ENABLE_MESSAGE_CONTENT_ARCHIVE: 'true' }).ENABLE_MESSAGE_CONTENT_ARCHIVE).toBe(true);
+    expect(parseEnv({ ...base, ENABLE_MESSAGE_CONTENT_ARCHIVE: 'false' }).ENABLE_MESSAGE_CONTENT_ARCHIVE).toBe(false);
+    expect(() => parseEnv({ ...base, ENABLE_MESSAGE_CONTENT_ARCHIVE: 'yes' })).toThrow();
+  });
+
 });

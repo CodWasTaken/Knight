@@ -9,6 +9,8 @@ const EnvSchema = z.object({
   APP_URL: z.string().url(),
   DATABASE_URL: z.string().url(),
   REDIS_URL: z.string().url(),
+  ENABLE_MESSAGE_CONTENT_ARCHIVE: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
+  KNIGHT_BACKUP_DIR: z.string().min(1).default('/data/knight-backups'),
 });
 
 const WebEnvSchema = EnvSchema.pick({
@@ -18,6 +20,7 @@ const WebEnvSchema = EnvSchema.pick({
   AUTH_SECRET: true,
   APP_URL: true,
   DATABASE_URL: true,
+  ENABLE_MESSAGE_CONTENT_ARCHIVE: true,
 }).extend({
   DISCORD_TOKEN: EnvSchema.shape.DISCORD_TOKEN.optional(),
 });
