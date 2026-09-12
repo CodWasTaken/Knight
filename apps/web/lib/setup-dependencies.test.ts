@@ -27,6 +27,9 @@ function fakeRepositories() {
       append: vi.fn().mockResolvedValue({ entryHash: 'ledger-hash' }),
       getLoggingSettings: vi.fn().mockResolvedValue(null),
     },
+    security: {
+      getSecurityState: vi.fn().mockResolvedValue({ mode: 'NORMAL', lockedScopes: [] }),
+    },
   };
 }
 

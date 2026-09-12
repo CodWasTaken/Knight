@@ -19,7 +19,14 @@ vi.mock('../../../../lib/discord-runtime', () => ({
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }));
 vi.mock('next/navigation', () => ({ redirect: mocks.redirect }));
 
-import { saveFirewallSettingsAction, saveInventoryTrustAction } from './actions';
+import {
+  activateLockdownAction,
+  activatePanicAction,
+  clearLockdownAction,
+  clearPanicAction,
+  saveFirewallSettingsAction,
+  saveInventoryTrustAction,
+} from './actions';
 import {
   removeProtectedResourceAction,
   saveProtectedResourceAction,
@@ -42,6 +49,9 @@ function setup() {
     saveProtection: vi.fn().mockResolvedValue({}),
     getProtectionLevel: vi.fn().mockResolvedValue(ProtectionLevel.Critical),
     removeProtection: vi.fn().mockResolvedValue(undefined),
+    getSecurityState: vi.fn().mockResolvedValue({ mode: 'NORMAL', lockedScopes: [] }),
+    transitionSecurityState: vi.fn().mockResolvedValue({}),
+    findOrCreateIncident: vi.fn().mockResolvedValue({ id: 'incident-1' }),
   };
   const repositories = {
     guilds: {},
@@ -100,6 +110,33 @@ describe('security dashboard actions', () => {
     expect(security.saveFirewallSettings).not.toHaveBeenCalled();
   });
 
+  it('blocks firewall configuration while bots and webhooks are locked down', async () => {
+    const { security } = setup();
+    security.getSecurityState.mockResolvedValueOnce({
+      mode: 'LOCKDOWN',
+      lockedScopes: ['BOTS_WEBHOOKS'],
+    });
+
+    await expect(
+      saveFirewallSettingsAction(
+        data({ guildId: '100', botMode: 'OBSERVE', webhookMode: 'ALERT' }),
+      ),
+    ).rejects.toThrow('emergency state');
+    expect(security.saveFirewallSettings).not.toHaveBeenCalled();
+  });
+
+  it('blocks inventory trust changes during Panic', async () => {
+    const { security } = setup();
+    security.getSecurityState.mockResolvedValueOnce({ mode: 'PANIC', lockedScopes: [] });
+
+    await expect(
+      saveInventoryTrustAction(
+        data({ guildId: '100', inventoryType: 'BOT', resourceId: '111', trustState: 'BLOCKED' }),
+      ),
+    ).rejects.toThrow('emergency state');
+    expect(security.setBotTrustState).not.toHaveBeenCalled();
+  });
+
   it('rejects an inventory ID that is not stored in the authorized guild', async () => {
     const { security } = setup();
     security.setBotTrustState.mockResolvedValueOnce(null);
@@ -119,6 +156,21 @@ describe('security dashboard actions', () => {
       ),
     ).rejects.toThrow('resource ID');
     expect(discord.getMemberState).not.toHaveBeenCalled();
+    expect(security.saveProtection).not.toHaveBeenCalled();
+  });
+
+  it('blocks protected-resource configuration during security Lockdown', async () => {
+    const { security } = setup();
+    security.getSecurityState.mockResolvedValueOnce({
+      mode: 'LOCKDOWN',
+      lockedScopes: ['SECURITY_CONFIG'],
+    });
+
+    await expect(
+      saveProtectedResourceAction(
+        data({ guildId: '100', resourceType: 'USER', resourceId: '555', level: 'CRITICAL' }),
+      ),
+    ).rejects.toThrow('emergency state');
     expect(security.saveProtection).not.toHaveBeenCalled();
   });
 
@@ -164,5 +216,122 @@ describe('security dashboard actions', () => {
       level: ProtectionLevel.Critical,
       updatedBy: 'session-user',
     });
+  });
+
+  it('allows an authorized Security Manager to activate and clear Lockdown', async () => {
+    const { security } = setup();
+    await activateLockdownAction(
+      data({ guildId: '100', scope: 'SECURITY_CONFIG', reason: 'Investigating access' }),
+    );
+    await clearLockdownAction(
+      data({ guildId: '100', reason: 'Investigation complete' }),
+    );
+
+    expect(security.transitionSecurityState).toHaveBeenNthCalledWith(1, {
+      guildId: '100',
+      expectedModes: ['NORMAL', 'LOCKDOWN'],
+      mode: 'LOCKDOWN',
+      lockedScopes: ['SECURITY_CONFIG'],
+      reason: 'Investigating access',
+      updatedBy: 'session-user',
+    });
+    expect(security.transitionSecurityState).toHaveBeenNthCalledWith(2, {
+      guildId: '100',
+      expectedModes: ['LOCKDOWN'],
+      mode: 'NORMAL',
+      lockedScopes: [],
+      reason: 'Investigation complete',
+      updatedBy: 'session-user',
+    });
+  });
+
+  it('allows the owner and rejects a denied user through guild authorization', async () => {
+    const { security } = setup();
+    mocks.requireGuildAccess.mockResolvedValueOnce('OWNER');
+    await activateLockdownAction(
+      data({ guildId: '100', scope: 'FULL', reason: 'Owner containment' }),
+    );
+    expect(security.transitionSecurityState).toHaveBeenCalledTimes(1);
+
+    mocks.requireGuildAccess.mockRejectedValueOnce(new Error('denied'));
+    await expect(
+      activateLockdownAction(
+        data({ guildId: '100', scope: 'FULL', reason: 'Unauthorized request' }),
+      ),
+    ).rejects.toThrow('denied');
+    expect(security.transitionSecurityState).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects arbitrary Lockdown scopes before persistence', async () => {
+    const { security } = setup();
+
+    await expect(
+      activateLockdownAction(
+        data({ guildId: '100', scope: 'CUSTOM_SCOPE', reason: 'Investigating' }),
+      ),
+    ).rejects.toThrow('Lockdown scope');
+    expect(security.transitionSecurityState).not.toHaveBeenCalled();
+  });
+
+  it('requires explicit Panic confirmation and records a confirmed incident', async () => {
+    const { security, repositories } = setup();
+
+    await expect(
+      activatePanicAction(data({ guildId: '100', reason: 'Confirmed compromise' })),
+    ).rejects.toThrow('confirmation');
+    expect(security.transitionSecurityState).not.toHaveBeenCalled();
+
+    await activatePanicAction(
+      data({ guildId: '100', reason: 'Confirmed compromise', confirm: 'on' }),
+    );
+    expect(security.transitionSecurityState).toHaveBeenCalledWith({
+      guildId: '100',
+      expectedModes: ['NORMAL', 'LOCKDOWN', 'PANIC'],
+      mode: 'PANIC',
+      lockedScopes: [],
+      reason: 'Confirmed compromise',
+      updatedBy: 'session-user',
+    });
+    expect(security.findOrCreateIncident).toHaveBeenCalledWith(
+      expect.objectContaining({
+        guildId: '100',
+        actorKey: 'emergency:panic',
+        severity: 'CRITICAL',
+      }),
+    );
+    expect(repositories.securityLedger.append).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'security.panic.enabled',
+        actorUserId: 'session-user',
+        incidentId: 'incident-1',
+      }),
+    );
+  });
+
+  it('only clears Panic through the explicit Panic recovery action', async () => {
+    const { security } = setup();
+    await clearPanicAction(data({ guildId: '100', reason: 'Access restored' }));
+
+    expect(security.transitionSecurityState).toHaveBeenCalledWith({
+      guildId: '100',
+      expectedModes: ['PANIC'],
+      mode: 'NORMAL',
+      lockedScopes: [],
+      reason: 'Access restored',
+      updatedBy: 'session-user',
+    });
+  });
+
+  it('does not report success when the authoritative ledger append fails after persistence', async () => {
+    const { security, repositories } = setup();
+    repositories.securityLedger.append.mockRejectedValueOnce(new Error('ledger unavailable'));
+
+    await expect(
+      activateLockdownAction(
+        data({ guildId: '100', scope: 'FULL', reason: 'Incident containment' }),
+      ),
+    ).rejects.toThrow('ledger unavailable');
+    expect(security.transitionSecurityState).toHaveBeenCalledTimes(1);
+    expect(mocks.revalidatePath).not.toHaveBeenCalledWith('/guilds/100/security');
   });
 });

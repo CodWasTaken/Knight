@@ -11,11 +11,28 @@ function makeDependencies() {
       grant: vi.fn().mockResolvedValue(undefined),
       revoke: vi.fn().mockResolvedValue(undefined),
     },
+    security: {
+      getSecurityState: vi.fn().mockResolvedValue({ mode: 'NORMAL', lockedScopes: [] }),
+    },
     securityRecorder: { record: vi.fn().mockResolvedValue({ entryHash: 'ledger-hash' }) },
   };
 }
 
 describe('SecurityManagerService', () => {
+  it('blocks Security Manager changes during security configuration Lockdown', async () => {
+    const deps = makeDependencies();
+    deps.security.getSecurityState.mockResolvedValueOnce({
+      mode: 'LOCKDOWN',
+      lockedScopes: ['SECURITY_CONFIG'],
+    });
+    const service = new SecurityManagerService(deps);
+
+    await expect(
+      service.grant({ guildId: '100', actorUserId: '1', userId: '42' }),
+    ).rejects.toMatchObject({ code: 'EMERGENCY_STATE_BLOCKED' });
+    expect(deps.managers.grant).not.toHaveBeenCalled();
+  });
+
   it('allows the guild owner to grant and revoke Security Manager authority', async () => {
     const deps = makeDependencies();
     const service = new SecurityManagerService(deps);

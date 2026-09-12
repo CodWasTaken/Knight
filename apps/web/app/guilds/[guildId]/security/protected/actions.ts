@@ -7,6 +7,7 @@ import { redirect } from 'next/navigation';
 import { auth } from '../../../../../auth';
 import { requireGuildAccess } from '../../../../../lib/authorization';
 import { getWebDiscordAdapter } from '../../../../../lib/discord-runtime';
+import { requireEmergencyScopesAvailable } from '../../../../../lib/emergency-state';
 import { getWebRuntime } from '../../../../../lib/server-runtime';
 
 const RESOURCE_TYPES = new Set<SecurityResourceType>(['USER', 'ROLE', 'CHANNEL']);
@@ -44,6 +45,11 @@ function resourceInput(formData: FormData) {
 export async function saveProtectedResourceAction(formData: FormData): Promise<void> {
   const { guildId, runtime, actorUserId } = await authorized(formData);
   const { resourceType, resourceId } = resourceInput(formData);
+  await requireEmergencyScopesAvailable(runtime.repositories.security, guildId, [
+    'SECURITY_CONFIG',
+    ...(resourceType === 'ROLE' ? (['ROLES'] as const) : []),
+    ...(resourceType === 'CHANNEL' ? (['CHANNELS'] as const) : []),
+  ]);
   const level = requiredString(formData, 'level') as ProtectionLevel;
   if (!LEVELS.has(level)) throw new Error('Invalid protection level.');
   const discord = getWebDiscordAdapter(runtime);
@@ -93,6 +99,11 @@ export async function saveProtectedResourceAction(formData: FormData): Promise<v
 export async function removeProtectedResourceAction(formData: FormData): Promise<void> {
   const { guildId, runtime, actorUserId } = await authorized(formData);
   const { resourceType, resourceId } = resourceInput(formData);
+  await requireEmergencyScopesAvailable(runtime.repositories.security, guildId, [
+    'SECURITY_CONFIG',
+    ...(resourceType === 'ROLE' ? (['ROLES'] as const) : []),
+    ...(resourceType === 'CHANNEL' ? (['CHANNELS'] as const) : []),
+  ]);
   if (
     (await runtime.repositories.security.getProtectionLevel(guildId, resourceType, resourceId)) ===
     ProtectionLevel.Normal

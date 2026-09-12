@@ -14,7 +14,7 @@ function makeDependencies() {
         updatedBy: null,
         updatedAt: null,
       }),
-      setSecurityState: vi.fn().mockImplementation(async (input) => ({
+      transitionSecurityState: vi.fn().mockImplementation(async (input) => ({
         ...input,
         updatedAt: new Date('2026-09-12T10:00:00Z'),
       })),
@@ -38,7 +38,7 @@ describe('EmergencyService', () => {
         reason: 'Investigating',
       }),
     ).rejects.toMatchObject({ code: 'EMERGENCY_AUTHORITY_REQUIRED' });
-    expect(dependencies.security.setSecurityState).not.toHaveBeenCalled();
+    expect(dependencies.security.transitionSecurityState).not.toHaveBeenCalled();
   });
 
   it('allows a Security Manager to activate Lockdown and records it', async () => {
@@ -53,8 +53,9 @@ describe('EmergencyService', () => {
       reason: 'Investigating access',
     });
 
-    expect(dependencies.security.setSecurityState).toHaveBeenCalledWith({
+    expect(dependencies.security.transitionSecurityState).toHaveBeenCalledWith({
       guildId: '100',
+      expectedModes: ['NORMAL', 'LOCKDOWN'],
       mode: 'LOCKDOWN',
       lockedScopes: ['MEMBER_MODERATION', 'SECURITY_CONFIG'],
       reason: 'Investigating access',
@@ -83,7 +84,7 @@ describe('EmergencyService', () => {
         confirmed: false,
       }),
     ).rejects.toMatchObject({ code: 'PANIC_CONFIRMATION_REQUIRED' });
-    expect(dependencies.security.setSecurityState).not.toHaveBeenCalled();
+    expect(dependencies.security.transitionSecurityState).not.toHaveBeenCalled();
   });
 
   it('persists Panic, creates an incident marker, and records the transition', async () => {
@@ -98,8 +99,9 @@ describe('EmergencyService', () => {
       confirmed: true,
     });
 
-    expect(dependencies.security.setSecurityState).toHaveBeenCalledWith({
+    expect(dependencies.security.transitionSecurityState).toHaveBeenCalledWith({
       guildId: '100',
+      expectedModes: ['NORMAL', 'LOCKDOWN', 'PANIC'],
       mode: 'PANIC',
       lockedScopes: [],
       reason: 'Confirmed compromise',
@@ -124,25 +126,23 @@ describe('EmergencyService', () => {
 
   it('supports authorized recovery transitions and status reads', async () => {
     const dependencies = makeDependencies();
-    dependencies.security.getSecurityState
-      .mockResolvedValueOnce({ mode: 'NORMAL' })
-      .mockResolvedValueOnce({ mode: 'LOCKDOWN' })
-      .mockResolvedValueOnce({ mode: 'PANIC' });
     const service = new EmergencyService(dependencies);
 
     expect(await service.status('100')).toMatchObject({ mode: 'NORMAL' });
     await service.unlock({ guildId: '100', actorUserId: 'owner', reason: 'Investigation complete' });
     await service.clearPanic({ guildId: '100', actorUserId: 'owner', reason: 'Access restored' });
 
-    expect(dependencies.security.setSecurityState).toHaveBeenNthCalledWith(1, {
+    expect(dependencies.security.transitionSecurityState).toHaveBeenNthCalledWith(1, {
       guildId: '100',
+      expectedModes: ['LOCKDOWN'],
       mode: 'NORMAL',
       lockedScopes: [],
       reason: 'Investigation complete',
       updatedBy: 'owner',
     });
-    expect(dependencies.security.setSecurityState).toHaveBeenNthCalledWith(2, {
+    expect(dependencies.security.transitionSecurityState).toHaveBeenNthCalledWith(2, {
       guildId: '100',
+      expectedModes: ['PANIC'],
       mode: 'NORMAL',
       lockedScopes: [],
       reason: 'Access restored',
@@ -154,14 +154,14 @@ describe('EmergencyService', () => {
   it('does not let the wrong recovery command clear the active state', async () => {
     const dependencies = makeDependencies();
     const service = new EmergencyService(dependencies);
-    dependencies.security.getSecurityState.mockResolvedValueOnce({ mode: 'PANIC' });
+    dependencies.security.transitionSecurityState.mockResolvedValueOnce(null);
 
     await expect(
       service.unlock({ guildId: '100', actorUserId: 'owner', reason: 'Use the correct control' }),
     ).rejects.toMatchObject({ code: 'INVALID_EMERGENCY_TRANSITION' });
-    expect(dependencies.security.setSecurityState).not.toHaveBeenCalled();
+    expect(dependencies.security.transitionSecurityState).toHaveBeenCalledTimes(1);
 
-    dependencies.security.getSecurityState.mockResolvedValueOnce({ mode: 'PANIC' });
+    dependencies.security.transitionSecurityState.mockResolvedValueOnce(null);
     await expect(
       service.lockdown({
         guildId: '100',
@@ -170,7 +170,7 @@ describe('EmergencyService', () => {
         reason: 'Keep restrictions active',
       }),
     ).rejects.toMatchObject({ code: 'INVALID_EMERGENCY_TRANSITION' });
-    expect(dependencies.security.setSecurityState).not.toHaveBeenCalled();
+    expect(dependencies.security.transitionSecurityState).toHaveBeenCalledTimes(2);
   });
 
   it('rejects empty reasons and arbitrary Lockdown scopes', async () => {

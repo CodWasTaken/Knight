@@ -225,4 +225,29 @@ describe('security persistence', () => {
       updatedBy: 'manager-1',
     });
   });
+
+  it('changes emergency state only when the locked current mode matches', async () => {
+    await security.setSecurityState({
+      guildId: 'g1',
+      mode: 'PANIC',
+      lockedScopes: [],
+      reason: 'Confirmed compromise',
+      updatedBy: 'owner-1',
+    });
+
+    const staleUnlock = await security.transitionSecurityState({
+      guildId: 'g1',
+      expectedModes: ['LOCKDOWN'],
+      mode: 'NORMAL',
+      lockedScopes: [],
+      reason: 'Stale unlock',
+      updatedBy: 'owner-1',
+    });
+
+    expect(staleUnlock).toBeNull();
+    expect(await security.getSecurityState('g1')).toMatchObject({
+      mode: 'PANIC',
+      reason: 'Confirmed compromise',
+    });
+  });
 });

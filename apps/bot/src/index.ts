@@ -106,11 +106,12 @@ export function createCommandRouterDependencies(input: {
     roleSync: new RoleSyncService({
       guilds,
       managers,
+      security,
       staff: staffProfiles,
       discord: input.discord,
       securityRecorder,
     }),
-    securityManagers: new SecurityManagerService({ guilds, managers, securityRecorder }),
+    securityManagers: new SecurityManagerService({ guilds, managers, security, securityRecorder }),
     emergency: new EmergencyService({
       guilds,
       managers,
@@ -145,6 +146,7 @@ export function createCommandRouterDependencies(input: {
       migrations: new GuardedMigrationService({
         guilds,
         staff: staffProfiles,
+        security,
         discord: input.discord,
         securityRecorder,
         createMigrationId: input.createCorrelationId,

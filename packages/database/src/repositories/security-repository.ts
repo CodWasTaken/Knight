@@ -287,23 +287,56 @@ export class SecurityRepository {
     reason: string;
     updatedBy: string;
   }): Promise<SecurityStateView> {
-    const lockedScopes = input.mode === 'LOCKDOWN' ? [...new Set(input.lockedScopes)] : [];
-    const [state] = await this.database.db
-      .insert(guildSecurityState)
-      .values({ ...input, lockedScopes })
-      .onConflictDoUpdate({
-        target: guildSecurityState.guildId,
-        set: {
-          mode: input.mode,
-          lockedScopes,
-          reason: input.reason,
-          updatedBy: input.updatedBy,
-          updatedAt: new Date(),
-        },
-      })
-      .returning();
+    const state = await this.transitionSecurityState({
+      ...input,
+      expectedModes: ['NORMAL', 'LOCKDOWN', 'PANIC'],
+    });
     if (!state) throw new Error('Failed to persist guild security state');
     return state;
+  }
+
+  public async transitionSecurityState(input: {
+    guildId: string;
+    expectedModes: readonly SecurityStateMode[];
+    mode: SecurityStateMode;
+    lockedScopes: readonly SecurityLockdownScope[];
+    reason: string;
+    updatedBy: string;
+  }): Promise<SecurityStateView | null> {
+    const { expectedModes, ...stateInput } = input;
+    const lockedScopes = input.mode === 'LOCKDOWN' ? [...new Set(input.lockedScopes)] : [];
+    return this.database.db.transaction(async (tx) => {
+      const [guild] = await tx
+        .select({ id: guilds.id })
+        .from(guilds)
+        .where(eq(guilds.id, input.guildId))
+        .for('update')
+        .limit(1);
+      if (!guild) throw new Error('Guild not found for security state');
+      const [current] = await tx
+        .select({ mode: guildSecurityState.mode })
+        .from(guildSecurityState)
+        .where(eq(guildSecurityState.guildId, input.guildId))
+        .limit(1);
+      if (!expectedModes.includes(current?.mode ?? 'NORMAL')) return null;
+
+      const [state] = await tx
+        .insert(guildSecurityState)
+        .values({ ...stateInput, lockedScopes })
+        .onConflictDoUpdate({
+          target: guildSecurityState.guildId,
+          set: {
+            mode: input.mode,
+            lockedScopes,
+            reason: input.reason,
+            updatedBy: input.updatedBy,
+            updatedAt: new Date(),
+          },
+        })
+        .returning();
+      if (!state) throw new Error('Failed to persist guild security state');
+      return state;
+    });
   }
 
   public async upsertBotInventory(input: {

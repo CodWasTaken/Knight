@@ -7,6 +7,7 @@ function dependencies(
     webhookMode?: 'OBSERVE' | 'ALERT' | 'ENFORCE';
     botTrust?: 'UNKNOWN' | 'BLOCKED' | null;
     webhookTrust?: Record<string, 'UNKNOWN' | 'BLOCKED'>;
+    securityMode?: 'NORMAL' | 'LOCKDOWN' | 'PANIC';
   } = {},
 ) {
   const security = {
@@ -30,6 +31,10 @@ function dependencies(
     }),
     upsertWebhookInventory: vi.fn().mockResolvedValue({}),
     recordEvent: vi.fn().mockResolvedValue({}),
+    getSecurityState: vi.fn().mockResolvedValue({
+      mode: input.securityMode ?? 'NORMAL',
+      lockedScopes: input.securityMode === 'LOCKDOWN' ? ['BOTS_WEBHOOKS'] : [],
+    }),
   };
   return {
     security,
@@ -133,5 +138,21 @@ describe('FirewallService', () => {
     expect(deps.security.recordEvent).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'firewall.bot.removal_failed' }),
     );
+  });
+
+  it('reads emergency state and continues explicit blocked removal during Panic', async () => {
+    const deps = dependencies({
+      botMode: 'ENFORCE',
+      botTrust: 'BLOCKED',
+      securityMode: 'PANIC',
+    });
+
+    await expect(new FirewallService(deps).handleBotJoin('g1', 'blocked-bot')).resolves.toEqual({
+      observed: 1,
+      removed: 1,
+    });
+
+    expect(deps.security.getSecurityState).toHaveBeenCalledWith('g1');
+    expect(deps.discord.kickMember).toHaveBeenCalledTimes(1);
   });
 });

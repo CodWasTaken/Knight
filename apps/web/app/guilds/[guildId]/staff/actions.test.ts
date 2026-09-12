@@ -42,7 +42,12 @@ describe('updateStaffProfilePolicyAction', () => {
 
   it('stops before profile lookup when live guild authorization denies access', async () => {
     const getCurrentProfileVersion = vi.fn();
-    const repositories = { staff: { getCurrentProfileVersion }, guilds: {}, managers: {} };
+    const repositories = {
+      staff: { getCurrentProfileVersion },
+      guilds: {},
+      managers: {},
+      security: { getSecurityState: vi.fn() },
+    };
     mocks.auth.mockResolvedValue({ user: { id: 'unauthorized-user' } });
     mocks.getWebRuntime.mockReturnValue({ repositories });
     mocks.requireGuildAccess.mockRejectedValue(new Error('denied'));
@@ -56,6 +61,28 @@ describe('updateStaffProfilePolicyAction', () => {
     expect(mocks.updatePolicy).not.toHaveBeenCalled();
   });
 
+  it('blocks Staff Profile policy changes during Panic', async () => {
+    const getCurrentProfileVersion = vi.fn();
+    const repositories = {
+      staff: { getCurrentProfileVersion },
+      guilds: {},
+      managers: {},
+      security: {
+        getSecurityState: vi.fn().mockResolvedValue({ mode: 'PANIC', lockedScopes: [] }),
+      },
+    };
+    mocks.auth.mockResolvedValue({ user: { id: 'owner' } });
+    mocks.getWebRuntime.mockReturnValue({ repositories });
+    mocks.requireGuildAccess.mockResolvedValue('OWNER');
+    const formData = new FormData();
+    formData.set('guildId', '100');
+    formData.set('profileId', '11111111-1111-4111-8111-111111111111');
+
+    await expect(updateStaffProfilePolicyAction(formData)).rejects.toThrow('emergency state');
+    expect(getCurrentProfileVersion).not.toHaveBeenCalled();
+    expect(mocks.updatePolicy).not.toHaveBeenCalled();
+  });
+
   it('uses the Auth.js actor and ignores a forged actor form field', async () => {
     const repositories = {
       staff: {
@@ -65,6 +92,7 @@ describe('updateStaffProfilePolicyAction', () => {
       },
       guilds: {},
       managers: {},
+      security: { getSecurityState: vi.fn().mockResolvedValue({ mode: 'NORMAL', lockedScopes: [] }) },
     };
     mocks.auth.mockResolvedValue({ user: { id: 'session-manager' } });
     mocks.getWebRuntime.mockReturnValue({ repositories });
@@ -121,6 +149,7 @@ describe('updateStaffProfilePolicyAction', () => {
       },
       guilds: {},
       managers: {},
+      security: { getSecurityState: vi.fn().mockResolvedValue({ mode: 'NORMAL', lockedScopes: [] }) },
     };
     mocks.auth.mockResolvedValue({ user: { id: 'owner' } });
     mocks.getWebRuntime.mockReturnValue({ repositories });
@@ -171,7 +200,7 @@ describe('dashboard Staff Profile metadata actions', () => {
   });
 
   it('creates from Auth.js identity and server-side Discord state, ignoring forged actor input', async () => {
-    const repositories = { staff: {}, guilds: {}, managers: {} };
+    const repositories = { staff: {}, guilds: {}, managers: {}, security: { getSecurityState: vi.fn().mockResolvedValue({ mode: 'NORMAL', lockedScopes: [] }) } };
     const discord = { getGuildState: vi.fn(), addRole: vi.fn(), removeRole: vi.fn() };
     mocks.auth.mockResolvedValue({ user: { id: 'session-manager' } });
     mocks.getWebRuntime.mockReturnValue({ repositories, env: { DISCORD_TOKEN: 'token' } });
@@ -201,7 +230,7 @@ describe('dashboard Staff Profile metadata actions', () => {
   });
 
   it('updates metadata through the same server-side Discord adapter', async () => {
-    const repositories = { staff: {}, guilds: {}, managers: {} };
+    const repositories = { staff: {}, guilds: {}, managers: {}, security: { getSecurityState: vi.fn().mockResolvedValue({ mode: 'NORMAL', lockedScopes: [] }) } };
     const discord = { getGuildState: vi.fn(), addRole: vi.fn(), removeRole: vi.fn() };
     mocks.auth.mockResolvedValue({ user: { id: 'owner' } });
     mocks.getWebRuntime.mockReturnValue({ repositories, env: { DISCORD_TOKEN: 'token' } });
@@ -232,7 +261,7 @@ describe('dashboard Staff Profile metadata actions', () => {
   });
 
   it('fails closed when the web service has no Discord bot adapter', async () => {
-    const repositories = { staff: {}, guilds: {}, managers: {} };
+    const repositories = { staff: {}, guilds: {}, managers: {}, security: { getSecurityState: vi.fn().mockResolvedValue({ mode: 'NORMAL', lockedScopes: [] }) } };
     mocks.auth.mockResolvedValue({ user: { id: 'owner' } });
     mocks.getWebRuntime.mockReturnValue({ repositories, env: {} });
     mocks.requireGuildAccess.mockResolvedValue('OWNER');

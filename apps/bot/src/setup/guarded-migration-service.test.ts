@@ -36,6 +36,9 @@ function makeDependencies(): GuardedMigrationDependencies {
       }),
       listActiveAssignmentsForProfile: vi.fn().mockResolvedValue([{ userId: '42' }]),
     },
+    security: {
+      getSecurityState: vi.fn().mockResolvedValue({ mode: 'NORMAL', lockedScopes: [] }),
+    },
     discord: {
       getGuildState: vi.fn().mockResolvedValue({
         guildId: '100',
@@ -53,6 +56,22 @@ function makeDependencies(): GuardedMigrationDependencies {
 }
 
 describe('GuardedMigrationService', () => {
+  it('blocks Guarded permission mutations during roles Lockdown', async () => {
+    const deps = makeDependencies();
+    vi.mocked(deps.security.getSecurityState).mockResolvedValueOnce({
+      mode: 'LOCKDOWN',
+      lockedScopes: ['ROLES'],
+    } as never);
+
+    await expect(
+      new GuardedMigrationService(deps).enableBanGuard({
+        guildId: '100',
+        actorUserId: 'owner',
+      }),
+    ).rejects.toMatchObject({ code: 'EMERGENCY_STATE_BLOCKED' });
+    expect(deps.discord.setRolePermissions).not.toHaveBeenCalled();
+  });
+
   it('requires TEST mode before Guarded preview', async () => {
     const deps = makeDependencies();
     deps.guilds.get = vi

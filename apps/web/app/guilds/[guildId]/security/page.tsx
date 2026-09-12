@@ -1,16 +1,32 @@
 import Link from 'next/link';
 import { getWebRuntime } from '../../../../lib/server-runtime';
-import { saveFirewallSettingsAction, saveInventoryTrustAction } from './actions';
+import {
+  activateLockdownAction,
+  activatePanicAction,
+  clearLockdownAction,
+  clearPanicAction,
+  saveFirewallSettingsAction,
+  saveInventoryTrustAction,
+} from './actions';
 
 const MODES = ['OBSERVE', 'ALERT', 'ENFORCE'] as const;
 const TRUST_STATES = ['TRUSTED', 'APPROVED', 'UNKNOWN', 'BLOCKED'] as const;
+const LOCKDOWN_SCOPES = [
+  ['MEMBER_MODERATION', 'Member moderation'],
+  ['ROLES', 'Roles'],
+  ['CHANNELS', 'Channels'],
+  ['BOTS_WEBHOOKS', 'Bots and webhooks'],
+  ['SECURITY_CONFIG', 'Security configuration'],
+  ['FULL', 'Full'],
+] as const;
 
 export default async function SecurityPage({
   params,
 }: Readonly<{ params: Promise<{ guildId: string }> }>) {
   const { guildId } = await params;
   const security = getWebRuntime().repositories.security;
-  const [settings, incidents, bots, webhooks] = await Promise.all([
+  const [emergency, settings, incidents, bots, webhooks] = await Promise.all([
+    security.getSecurityState(guildId),
     security.getFirewallSettings(guildId),
     security.listActiveIncidents(guildId),
     security.listBotInventory(guildId),
@@ -47,6 +63,61 @@ export default async function SecurityPage({
         </div>
         <Link href={`/guilds/${guildId}/security/protected`}>Protected resources</Link>
       </header>
+
+      <section className="panel">
+        <h2>Emergency state</h2>
+        <p>
+          <strong>{emergency.mode}</strong> · Scopes:{' '}
+          {emergency.lockedScopes.length === 0 ? 'none' : emergency.lockedScopes.join(', ')}
+        </p>
+        <p className="muted">{emergency.reason ?? 'No emergency state has been set.'}</p>
+        <div className="previewTable">
+          <form action={activateLockdownAction} className="previewRow">
+            <input name="guildId" type="hidden" value={guildId} />
+            <label>
+              <span>Lockdown scope</span>
+              <select name="scope" required>
+                {LOCKDOWN_SCOPES.map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>Reason</span>
+              <input name="reason" required type="text" />
+            </label>
+            <button type="submit">Enable Lockdown</button>
+          </form>
+          <form action={clearLockdownAction} className="previewRow">
+            <input name="guildId" type="hidden" value={guildId} />
+            <label>
+              <span>Reason</span>
+              <input name="reason" required type="text" />
+            </label>
+            <button className="secondary" type="submit">Clear Lockdown</button>
+          </form>
+          <form action={activatePanicAction} className="previewRow">
+            <input name="guildId" type="hidden" value={guildId} />
+            <label>
+              <span>Reason</span>
+              <input name="reason" required type="text" />
+            </label>
+            <label>
+              <input name="confirm" required type="checkbox" />
+              <span>Confirm Panic</span>
+            </label>
+            <button type="submit">Activate Panic</button>
+          </form>
+          <form action={clearPanicAction} className="previewRow">
+            <input name="guildId" type="hidden" value={guildId} />
+            <label>
+              <span>Reason</span>
+              <input name="reason" required type="text" />
+            </label>
+            <button className="secondary" type="submit">Clear Panic</button>
+          </form>
+        </div>
+      </section>
 
       <section className="panel">
         <h2>Firewall modes</h2>

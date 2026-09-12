@@ -13,14 +13,29 @@ Knight starts in Observe so you can confirm service health, Discord hierarchy, S
 5. Open **Logging** and explicitly save the Security and Moderation notification destinations. Either destination may be **Disabled**; PostgreSQL remains the authoritative Security Ledger.
 6. Open **Security**, choose the bot and webhook firewall modes, and save them once. Observe is the safe default. Enforce removes only inventory entries you explicitly mark Blocked.
 7. Add existing users, roles, or channels under **Protected** only where a stronger target rule is useful.
-8. Assign staff with `/staff assign user:<member> profile:<profile>` and confirm state with `/staff inspect user:<member>`.
-9. Add explicit Knight Security Managers only where needed. Discord Administrator alone does not grant Knight management authority.
-10. Move from Observe to Test.
-11. Exercise Knight's moderation commands with controlled test targets/messages before Guarded.
+8. Review the **Emergency state** panel. Keep it Normal during routine setup; Lockdown and Panic are incident controls.
+9. Assign staff with `/staff assign user:<member> profile:<profile>` and confirm state with `/staff inspect user:<member>`.
+10. Add explicit Knight Security Managers only where needed. Discord Administrator alone does not grant Knight management authority.
+11. Move from Observe to Test.
+12. Exercise Knight's moderation commands with controlled test targets/messages before Guarded.
 
 The setup wizard will not advance past `LOGGING` until logging settings have been saved once. Saving both destinations as **Disabled** satisfies this gate and does not require Knight to create or access a Discord notification channel.
 
 The wizard will not advance past `PROTECTION` until the firewall modes have been saved once. Explicitly saving Observe for both firewalls satisfies this gate; protected resources are optional.
+
+## Emergency controls
+
+The guild owner and explicit Knight Security Managers can inspect or change emergency state from the Security dashboard or with these ephemeral commands:
+
+```text
+/security status
+/security lockdown scope:<scope> reason:<text>
+/security unlock reason:<text>
+/security panic reason:<text> confirm:<true>
+/security panic-clear reason:<text>
+```
+
+Panic requires explicit confirmation. It freezes privileged Knight mutations and records a critical incident; it does not strip roles or rewrite the server. Status and the matching recovery control remain available. See [Lockdown and Panic](../security/lockdown-and-panic.md) for scope and recovery details.
 
 ## Moderation command surface
 

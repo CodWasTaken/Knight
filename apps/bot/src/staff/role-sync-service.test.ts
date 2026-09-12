@@ -21,6 +21,9 @@ function makeDependencies() {
     managers: {
       isSecurityManager: vi.fn().mockResolvedValue(false),
     },
+    security: {
+      getSecurityState: vi.fn().mockResolvedValue({ mode: 'NORMAL', lockedScopes: [] }),
+    },
     staff: {
       createProfileWithInitialVersion: vi.fn(),
       getCurrentProfileVersion: vi.fn().mockResolvedValue(moderatorVersion),
@@ -41,6 +44,23 @@ function makeDependencies() {
 }
 
 describe('RoleSyncService', () => {
+  it('blocks staff configuration mutations during Panic', async () => {
+    const deps = makeDependencies();
+    deps.security.getSecurityState.mockResolvedValueOnce({ mode: 'PANIC', lockedScopes: [] });
+    const service = new RoleSyncService(deps);
+
+    await expect(
+      service.assign({
+        guildId: '100',
+        actorUserId: '1',
+        userId: '42',
+        profileId: 'profile-mod',
+      }),
+    ).rejects.toMatchObject({ code: 'EMERGENCY_STATE_BLOCKED' });
+    expect(deps.staff.assign).not.toHaveBeenCalled();
+    expect(deps.discord.addRole).not.toHaveBeenCalled();
+  });
+
   it('persists an assignment before adding the mapped Discord role', async () => {
     const deps = makeDependencies();
     const service = new RoleSyncService(deps);

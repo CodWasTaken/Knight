@@ -29,6 +29,7 @@ export function createWebSetupServices(input: {
     migrations: new GuardedMigrationService({
       guilds: input.repositories.guilds,
       staff: input.repositories.staff,
+      security: input.repositories.security,
       discord: input.discord,
       securityRecorder,
       createMigrationId: input.createMigrationId,

@@ -21,6 +21,7 @@ export type FirewallServiceDependencies = Readonly<{
     | 'getWebhookInventory'
     | 'upsertWebhookInventory'
     | 'recordEvent'
+    | 'getSecurityState'
   >;
   discord: Pick<DiscordActionPort, 'kickMember' | 'listChannelWebhooks' | 'deleteWebhook'>;
   recorder: Pick<SecurityRecorder, 'record'>;
@@ -105,6 +106,7 @@ export class FirewallService {
     }
 
     try {
+      await this.dependencies.security.getSecurityState(guildId);
       await this.dependencies.discord.kickMember({
         guildId,
         targetUserId: botUserId,
@@ -152,6 +154,7 @@ export class FirewallService {
       }
       if (settings.webhookMode !== 'ENFORCE' || trustState !== 'BLOCKED') continue;
       try {
+        await this.dependencies.security.getSecurityState(guildId);
         await this.dependencies.discord.deleteWebhook(
           webhook.webhookId,
           'Explicitly blocked by Knight webhook firewall',

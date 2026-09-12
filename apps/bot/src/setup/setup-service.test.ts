@@ -30,6 +30,7 @@ function makeDependencies(): SetupDependencies {
     },
     security: {
       getFirewallSettings: vi.fn().mockResolvedValue({ configured: false }),
+      getSecurityState: vi.fn().mockResolvedValue({ mode: 'NORMAL', lockedScopes: [] }),
     },
     discord: {
       getGuildState: vi.fn().mockResolvedValue({
@@ -72,6 +73,28 @@ describe('SetupService', () => {
     await service.advanceStep('100', 'owner');
 
     expect(deps.guilds.updateSetupState).toHaveBeenCalledWith('100', 'HEALTH', ['WELCOME']);
+  });
+
+  it('blocks setup progression and mode changes during Panic', async () => {
+    const deps = makeDependencies();
+    deps.security.getSecurityState = vi.fn().mockResolvedValue({
+      mode: 'PANIC',
+      lockedScopes: [],
+    });
+    const service = new SetupService(deps);
+
+    await expect(service.advanceStep('100', 'owner')).rejects.toMatchObject({
+      code: 'EMERGENCY_STATE_BLOCKED',
+    });
+    await expect(
+      service.transitionMode({
+        guildId: '100',
+        actorUserId: 'owner',
+        targetMode: GuildMode.Test,
+      }),
+    ).rejects.toMatchObject({ code: 'EMERGENCY_STATE_BLOCKED' });
+    expect(deps.guilds.updateSetupState).not.toHaveBeenCalled();
+    expect(deps.guilds.setMode).not.toHaveBeenCalled();
   });
 
   it('requires an explicit logging choice before advancing to protection', async () => {

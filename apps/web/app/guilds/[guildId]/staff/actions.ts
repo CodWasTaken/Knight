@@ -10,6 +10,7 @@ import { redirect } from 'next/navigation';
 import { auth } from '../../../../auth';
 import { requireGuildAccess } from '../../../../lib/authorization';
 import { getWebDiscordAdapter } from '../../../../lib/discord-runtime';
+import { requireEmergencyScopesAvailable } from '../../../../lib/emergency-state';
 import { getWebRuntime, type WebRuntime } from '../../../../lib/server-runtime';
 import {
   createStaffProfileFromDashboard,
@@ -86,6 +87,10 @@ async function authorizedStaffRuntime(formData: FormData): Promise<{
   const guildId = requiredString(formData, 'guildId');
   const runtime = getWebRuntime();
   await requireGuildAccess(guildId, session, runtime.repositories);
+  await requireEmergencyScopesAvailable(runtime.repositories.security, guildId, [
+    'ROLES',
+    'SECURITY_CONFIG',
+  ]);
   return { guildId, actorUserId: session.user.id, runtime };
 }
 

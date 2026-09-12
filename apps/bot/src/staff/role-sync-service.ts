@@ -51,6 +51,12 @@ export interface RoleSyncStaffPort {
 export type RoleSyncDependencies = Readonly<{
   guilds: { get(guildId: string): Promise<{ ownerId: string } | null> };
   managers: { isSecurityManager(guildId: string, userId: string): Promise<boolean> };
+  security: {
+    getSecurityState(guildId: string): Promise<{
+      mode: 'NORMAL' | 'LOCKDOWN' | 'PANIC';
+      lockedScopes: readonly string[];
+    }>;
+  };
   staff: RoleSyncStaffPort;
   securityRecorder: Pick<SecurityRecorder, 'record'>;
   discord: Pick<DiscordActionPort, 'addRole' | 'removeRole' | 'getMemberState'>;
@@ -97,6 +103,19 @@ function toAuthority(profile: StaffProfileVersionRecord | null): AuthoritySnapsh
 
 export class RoleSyncService {
   public constructor(private readonly dependencies: RoleSyncDependencies) {}
+
+  private async requireConfigurationAvailable(guildId: string): Promise<void> {
+    const state = await this.dependencies.security.getSecurityState(guildId);
+    const scopedLock = state.lockedScopes.some((scope) =>
+      ['ROLES', 'SECURITY_CONFIG', 'FULL'].includes(scope),
+    );
+    if (state.mode === 'PANIC' || (state.mode === 'LOCKDOWN' && scopedLock)) {
+      throw new StaffManagementError(
+        'EMERGENCY_STATE_BLOCKED',
+        'The current emergency state blocks Staff Profile changes.',
+      );
+    }
+  }
 
   private async recordConfig(
     action: string,
@@ -180,6 +199,7 @@ export class RoleSyncService {
     discordRoleId: string;
     rank: number;
   }): Promise<unknown> {
+    await this.requireConfigurationAvailable(input.guildId);
     if (!Number.isInteger(input.rank) || input.rank < 0) {
       throw new StaffManagementError(
         'INVALID_RANK',
@@ -219,6 +239,7 @@ export class RoleSyncService {
     userId: string;
     profileReference: string;
   }): Promise<{ syncStatus: AssignmentSyncStatus }> {
+    await this.requireConfigurationAvailable(input.guildId);
     await this.staffManagerState(input.guildId, input.actorUserId);
     const reference = input.profileReference.trim();
     const profiles = await this.dependencies.staff.listProfiles(input.guildId);
@@ -258,6 +279,7 @@ export class RoleSyncService {
     userId: string;
     profileId: string;
   }): Promise<{ syncStatus: AssignmentSyncStatus }> {
+    await this.requireConfigurationAvailable(input.guildId);
     const manager = await this.staffManagerState(input.guildId, input.actorUserId);
     const desired = requireProfileState(
       await this.dependencies.staff.getCurrentProfileVersion(input.guildId, input.profileId),
@@ -311,6 +333,7 @@ export class RoleSyncService {
     actorUserId: string;
     userId: string;
   }): Promise<{ removed: boolean; syncStatus: AssignmentSyncStatus | null }> {
+    await this.requireConfigurationAvailable(input.guildId);
     const manager = await this.staffManagerState(input.guildId, input.actorUserId);
     const assignment = await this.dependencies.staff.getActiveAssignment(
       input.guildId,

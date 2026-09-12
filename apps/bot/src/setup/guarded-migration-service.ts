@@ -72,6 +72,12 @@ export interface GuardedMigrationDependencies {
       profileId: string,
     ): Promise<readonly { userId: string }[]>;
   };
+  security: {
+    getSecurityState(guildId: string): Promise<{
+      mode: 'NORMAL' | 'LOCKDOWN' | 'PANIC';
+      lockedScopes: readonly string[];
+    }>;
+  };
   discord: {
     getGuildState(guildId: string): Promise<{
       guildId: string;
@@ -123,6 +129,19 @@ export class GuardedMigrationService {
       throw new GuardedMigrationError(
         'OWNER_REQUIRED',
         'Only the Discord guild owner may change Guarded permissions.',
+      );
+    }
+  }
+
+  private async requireConfigurationAvailable(guildId: string): Promise<void> {
+    const state = await this.dependencies.security.getSecurityState(guildId);
+    const scopedLock = state.lockedScopes.some((scope) =>
+      ['ROLES', 'SECURITY_CONFIG', 'FULL'].includes(scope),
+    );
+    if (state.mode === 'PANIC' || (state.mode === 'LOCKDOWN' && scopedLock)) {
+      throw new GuardedMigrationError(
+        'EMERGENCY_STATE_BLOCKED',
+        'The current emergency state blocks Guarded permission changes.',
       );
     }
   }
@@ -194,6 +213,7 @@ export class GuardedMigrationService {
   public async enableBanGuard(input: { guildId: string; actorUserId: string }): Promise<void> {
     const guild = await this.requireGuild(input.guildId);
     this.requireOwner(guild, input.actorUserId);
+    await this.requireConfigurationAvailable(input.guildId);
     if (guild.mode !== GuildMode.Test) {
       throw new GuardedMigrationError(
         'TEST_MODE_REQUIRED',
@@ -285,6 +305,7 @@ export class GuardedMigrationService {
   public async rollbackBanGuard(input: { guildId: string; actorUserId: string }): Promise<void> {
     const guild = await this.requireGuild(input.guildId);
     this.requireOwner(guild, input.actorUserId);
+    await this.requireConfigurationAvailable(input.guildId);
     if (guild.mode !== GuildMode.Guarded) {
       throw new GuardedMigrationError(
         'GUARDED_MODE_REQUIRED',

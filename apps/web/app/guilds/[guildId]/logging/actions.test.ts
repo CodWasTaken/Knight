@@ -35,6 +35,9 @@ function setup() {
     managers: {},
     staff: {},
     securityLedger: { append, saveLoggingSettings },
+    security: {
+      getSecurityState: vi.fn().mockResolvedValue({ mode: 'NORMAL', lockedScopes: [] }),
+    },
   };
   const discord = {
     listTextChannels: vi.fn().mockResolvedValue([
@@ -141,6 +144,17 @@ describe('logging settings action', () => {
     await expect(saveLoggingSettingsAction(formData('security'))).rejects.toThrow(
       'Live Discord logging',
     );
+    expect(saveLoggingSettings).not.toHaveBeenCalled();
+  });
+
+  it('blocks logging configuration during Panic', async () => {
+    const { repositories, saveLoggingSettings } = setup();
+    repositories.security.getSecurityState.mockResolvedValueOnce({
+      mode: 'PANIC',
+      lockedScopes: [],
+    });
+
+    await expect(saveLoggingSettingsAction(formData())).rejects.toThrow('emergency state');
     expect(saveLoggingSettings).not.toHaveBeenCalled();
   });
 });

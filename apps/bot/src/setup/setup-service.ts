@@ -35,6 +35,10 @@ export interface SetupDependencies {
   };
   security: {
     getFirewallSettings(guildId: string): Promise<{ configured: boolean }>;
+    getSecurityState(guildId: string): Promise<{
+      mode: 'NORMAL' | 'LOCKDOWN' | 'PANIC';
+      lockedScopes: readonly string[];
+    }>;
   };
   discord: {
     getGuildState(guildId: string): Promise<{
@@ -82,6 +86,19 @@ function nextAction(step: SetupStep): string {
 }
 export class SetupService {
   public constructor(private readonly dependencies: SetupDependencies) {}
+
+  private async requireConfigurationAvailable(guildId: string): Promise<void> {
+    const state = await this.dependencies.security.getSecurityState(guildId);
+    const scopedLock = state.lockedScopes.some((scope) =>
+      ['SECURITY_CONFIG', 'FULL'].includes(scope),
+    );
+    if (state.mode === 'PANIC' || (state.mode === 'LOCKDOWN' && scopedLock)) {
+      throw new SetupError(
+        'EMERGENCY_STATE_BLOCKED',
+        'The current emergency state blocks setup configuration changes.',
+      );
+    }
+  }
 
   private async requireAccess(guildId: string, actorUserId: string) {
     const guild = await this.dependencies.guilds.get(guildId);
@@ -145,6 +162,7 @@ export class SetupService {
 
   public async advanceStep(guildId: string, actorUserId: string): Promise<void> {
     await this.requireAccess(guildId, actorUserId);
+    await this.requireConfigurationAvailable(guildId);
     const setup = await this.dependencies.guilds.getSetupState(guildId);
     if (setup === null) {
       throw new SetupError(
@@ -187,6 +205,7 @@ export class SetupService {
     targetMode: GuildMode;
   }): Promise<void> {
     const guild = await this.requireAccess(input.guildId, input.actorUserId);
+    await this.requireConfigurationAvailable(input.guildId);
     if (input.targetMode === GuildMode.Guarded) {
       throw new SetupError(
         'GUARDED_MIGRATION_REQUIRED',

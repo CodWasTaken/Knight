@@ -18,7 +18,7 @@ export type EmergencyServiceDependencies = Readonly<{
   managers: Pick<SecurityManagerRepository, 'isSecurityManager'>;
   security: Pick<
     SecurityRepository,
-    'getSecurityState' | 'setSecurityState' | 'findOrCreateIncident'
+    'getSecurityState' | 'transitionSecurityState' | 'findOrCreateIncident'
   >;
   securityRecorder: Pick<SecurityRecorder, 'record'>;
   now: () => Date;
@@ -68,19 +68,6 @@ export class EmergencyService {
     return reason;
   }
 
-  private async requireCurrentMode(
-    guildId: string,
-    expectedMode: 'LOCKDOWN' | 'PANIC',
-  ): Promise<void> {
-    const current = await this.dependencies.security.getSecurityState(guildId);
-    if (current.mode !== expectedMode) {
-      throw new EmergencyServiceError(
-        'INVALID_EMERGENCY_TRANSITION',
-        `The guild is not currently in ${expectedMode}.`,
-      );
-    }
-  }
-
   private async transition(input: {
     guildId: string;
     actorUserId: string;
@@ -90,14 +77,22 @@ export class EmergencyService {
     action: string;
     severity: 'HIGH' | 'CRITICAL';
     incidentId?: string | null;
+    expectedModes: readonly SecurityStateMode[];
   }): Promise<SecurityStateView> {
-    const state = await this.dependencies.security.setSecurityState({
+    const state = await this.dependencies.security.transitionSecurityState({
       guildId: input.guildId,
+      expectedModes: input.expectedModes,
       mode: input.mode,
       lockedScopes: input.lockedScopes,
       reason: input.reason,
       updatedBy: input.actorUserId,
     });
+    if (state === null) {
+      throw new EmergencyServiceError(
+        'INVALID_EMERGENCY_TRANSITION',
+        'The emergency state changed before this request could be applied.',
+      );
+    }
     await this.dependencies.securityRecorder.record(
       {
         guildId: input.guildId,
@@ -134,13 +129,6 @@ export class EmergencyService {
         'Choose at least one supported Lockdown scope.',
       );
     }
-    const current = await this.dependencies.security.getSecurityState(input.guildId);
-    if (current.mode === 'PANIC') {
-      throw new EmergencyServiceError(
-        'INVALID_EMERGENCY_TRANSITION',
-        'Clear Panic before activating Lockdown.',
-      );
-    }
     return this.transition({
       guildId: input.guildId,
       actorUserId: input.actorUserId,
@@ -149,6 +137,7 @@ export class EmergencyService {
       reason,
       action: 'security.lockdown.enabled',
       severity: 'HIGH',
+      expectedModes: ['NORMAL', 'LOCKDOWN'],
     });
   }
 
@@ -159,7 +148,6 @@ export class EmergencyService {
   }): Promise<SecurityStateView> {
     await this.requireAuthority(input.guildId, input.actorUserId);
     const reason = this.reason(input.reason);
-    await this.requireCurrentMode(input.guildId, 'LOCKDOWN');
     return this.transition({
       ...input,
       mode: 'NORMAL',
@@ -167,6 +155,7 @@ export class EmergencyService {
       reason,
       action: 'security.lockdown.cleared',
       severity: 'HIGH',
+      expectedModes: ['LOCKDOWN'],
     });
   }
 
@@ -185,13 +174,20 @@ export class EmergencyService {
     await this.requireAuthority(input.guildId, input.actorUserId);
     const reason = this.reason(input.reason);
     const occurredAt = this.dependencies.now();
-    const state = await this.dependencies.security.setSecurityState({
+    const state = await this.dependencies.security.transitionSecurityState({
       guildId: input.guildId,
+      expectedModes: ['NORMAL', 'LOCKDOWN', 'PANIC'],
       mode: 'PANIC',
       lockedScopes: [],
       reason,
       updatedBy: input.actorUserId,
     });
+    if (state === null) {
+      throw new EmergencyServiceError(
+        'INVALID_EMERGENCY_TRANSITION',
+        'The emergency state changed before Panic could be applied.',
+      );
+    }
     const incident = await this.dependencies.security.findOrCreateIncident({
       guildId: input.guildId,
       actorKey: 'emergency:panic',
@@ -223,7 +219,6 @@ export class EmergencyService {
   }): Promise<SecurityStateView> {
     await this.requireAuthority(input.guildId, input.actorUserId);
     const reason = this.reason(input.reason);
-    await this.requireCurrentMode(input.guildId, 'PANIC');
     return this.transition({
       ...input,
       mode: 'NORMAL',
@@ -231,6 +226,7 @@ export class EmergencyService {
       reason,
       action: 'security.panic.cleared',
       severity: 'CRITICAL',
+      expectedModes: ['PANIC'],
     });
   }
 }

@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { auth } from '../../../../auth';
 import { requireGuildAccess } from '../../../../lib/authorization';
 import { getWebDiscordAdapter } from '../../../../lib/discord-runtime';
+import { requireEmergencyScopesAvailable } from '../../../../lib/emergency-state';
 import { getWebRuntime } from '../../../../lib/server-runtime';
 
 function requiredString(formData: FormData, name: string): string {
@@ -27,6 +28,9 @@ export async function saveLoggingSettingsAction(formData: FormData): Promise<voi
   const guildId = requiredString(formData, 'guildId');
   const runtime = getWebRuntime();
   await requireGuildAccess(guildId, session, runtime.repositories);
+  await requireEmergencyScopesAvailable(runtime.repositories.security, guildId, [
+    'SECURITY_CONFIG',
+  ]);
   const securityChannelId = optionalChannel(formData, 'securityChannelId');
   const moderationChannelId = optionalChannel(formData, 'moderationChannelId');
   if (securityChannelId !== null || moderationChannelId !== null) {

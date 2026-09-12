@@ -6,6 +6,12 @@ export type SecurityManagerDependencies = Readonly<{
     grant(input: { guildId: string; userId: string; grantedBy: string }): Promise<void>;
     revoke(guildId: string, userId: string): Promise<void>;
   };
+  security: {
+    getSecurityState(guildId: string): Promise<{
+      mode: 'NORMAL' | 'LOCKDOWN' | 'PANIC';
+      lockedScopes: readonly string[];
+    }>;
+  };
   securityRecorder: Pick<SecurityRecorder, 'record'>;
 }>;
 
@@ -48,6 +54,16 @@ export class SecurityManagerService {
       throw new SecurityManagerError(
         'OWNER_REQUIRED',
         'Only the Discord guild owner may change Security Managers.',
+      );
+    }
+    const state = await this.dependencies.security.getSecurityState(guildId);
+    const scopedLock = state.lockedScopes.some((scope) =>
+      ['SECURITY_CONFIG', 'FULL'].includes(scope),
+    );
+    if (state.mode === 'PANIC' || (state.mode === 'LOCKDOWN' && scopedLock)) {
+      throw new SecurityManagerError(
+        'EMERGENCY_STATE_BLOCKED',
+        'The current emergency state blocks Security Manager changes.',
       );
     }
   }
