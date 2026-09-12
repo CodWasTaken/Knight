@@ -2,6 +2,7 @@ import {
   GuildRepository,
   SecurityLedgerRepository,
   SecurityManagerRepository,
+  SecurityRepository,
   StaffRepository,
   type Database,
 } from '@knight/database';
@@ -15,6 +16,7 @@ describe('createWebRepositories', () => {
     expect(repositories.guilds).toBeInstanceOf(GuildRepository);
     expect(repositories.managers).toBeInstanceOf(SecurityManagerRepository);
     expect(repositories.securityLedger).toBeInstanceOf(SecurityLedgerRepository);
+    expect(repositories.security).toBeInstanceOf(SecurityRepository);
     expect(repositories.staff).toBeInstanceOf(StaffRepository);
   });
 });

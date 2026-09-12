@@ -1,5 +1,5 @@
 import { ProtectionLevel } from '@knight/contracts';
-import { and, desc, eq, gte, lte, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, lte, sql } from 'drizzle-orm';
 import type { Database } from '../client.js';
 import {
   guildFirewallSettings,
@@ -121,6 +121,15 @@ export class SecurityRepository {
     });
   }
 
+  public async listActiveIncidents(guildId: string): Promise<SecurityIncidentRecord[]> {
+    return this.database.db
+      .select()
+      .from(securityIncidents)
+      .where(and(eq(securityIncidents.guildId, guildId), eq(securityIncidents.status, 'ACTIVE')))
+      .orderBy(desc(securityIncidents.lastSeenAt))
+      .limit(100);
+  }
+
   public async getProtectionLevel(
     guildId: string,
     resourceType: SecurityResourceType,
@@ -177,6 +186,14 @@ export class SecurityRepository {
           eq(protectedResources.resourceId, resourceId),
         ),
       );
+  }
+
+  public async listProtectedResources(guildId: string): Promise<ProtectedResourceRecord[]> {
+    return this.database.db
+      .select()
+      .from(protectedResources)
+      .where(eq(protectedResources.guildId, guildId))
+      .orderBy(asc(protectedResources.resourceType), asc(protectedResources.resourceId));
   }
 
   public async getFirewallSettings(guildId: string): Promise<FirewallSettingsView> {
@@ -266,6 +283,27 @@ export class SecurityRepository {
     return record ?? null;
   }
 
+  public async listBotInventory(guildId: string): Promise<BotInventoryRecord[]> {
+    return this.database.db
+      .select()
+      .from(knownBots)
+      .where(eq(knownBots.guildId, guildId))
+      .orderBy(desc(knownBots.lastSeenAt));
+  }
+
+  public async setBotTrustState(
+    guildId: string,
+    botUserId: string,
+    trustState: InventoryTrustState,
+  ): Promise<BotInventoryRecord | null> {
+    const [record] = await this.database.db
+      .update(knownBots)
+      .set({ trustState })
+      .where(and(eq(knownBots.guildId, guildId), eq(knownBots.botUserId, botUserId)))
+      .returning();
+    return record ?? null;
+  }
+
   public async upsertWebhookInventory(input: {
     guildId: string;
     webhookId: string;
@@ -294,6 +332,27 @@ export class SecurityRepository {
       .from(knownWebhooks)
       .where(and(eq(knownWebhooks.guildId, guildId), eq(knownWebhooks.webhookId, webhookId)))
       .limit(1);
+    return record ?? null;
+  }
+
+  public async listWebhookInventory(guildId: string): Promise<WebhookInventoryRecord[]> {
+    return this.database.db
+      .select()
+      .from(knownWebhooks)
+      .where(eq(knownWebhooks.guildId, guildId))
+      .orderBy(desc(knownWebhooks.lastSeenAt));
+  }
+
+  public async setWebhookTrustState(
+    guildId: string,
+    webhookId: string,
+    trustState: InventoryTrustState,
+  ): Promise<WebhookInventoryRecord | null> {
+    const [record] = await this.database.db
+      .update(knownWebhooks)
+      .set({ trustState })
+      .where(and(eq(knownWebhooks.guildId, guildId), eq(knownWebhooks.webhookId, webhookId)))
+      .returning();
     return record ?? null;
   }
 }

@@ -122,6 +122,15 @@ export default async function SetupPage({
               <Link href={`/guilds/${guildId}/logging`}>Configure logging</Link>
             </div>
           ) : null}
+          {state.step === 'PROTECTION' ? (
+            <div className="notice">
+              <p>
+                Save the bot and webhook firewall modes before continuing. Observe is a valid
+                explicit choice.
+              </p>
+              <Link href={`/guilds/${guildId}/security`}>Configure protection</Link>
+            </div>
+          ) : null}
           {state.step !== 'COMPLETE' ? (
             <form action={advanceSetupAction} className="setupAction">
               <input name="guildId" type="hidden" value={guildId} />

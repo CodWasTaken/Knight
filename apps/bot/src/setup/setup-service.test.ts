@@ -28,6 +28,9 @@ function makeDependencies(): SetupDependencies {
     securityLedger: {
       getLoggingSettings: vi.fn().mockResolvedValue(null),
     },
+    security: {
+      getFirewallSettings: vi.fn().mockResolvedValue({ configured: false }),
+    },
     discord: {
       getGuildState: vi.fn().mockResolvedValue({
         guildId: '100',
@@ -102,6 +105,34 @@ describe('SetupService', () => {
       'STAFF',
       'POLICIES',
       'LOGGING',
+    ]);
+  });
+
+  it('requires an explicit firewall choice before advancing to backups', async () => {
+    const deps = makeDependencies();
+    deps.guilds.getSetupState = vi.fn().mockResolvedValue({
+      guildId: '100',
+      step: 'PROTECTION',
+      completedSteps: ['WELCOME', 'HEALTH', 'STAFF', 'POLICIES', 'LOGGING'],
+      updatedAt: new Date(),
+    });
+    const service = new SetupService(deps);
+
+    await expect(service.advanceStep('100', 'owner')).rejects.toMatchObject({
+      code: 'PROTECTION_NOT_CONFIGURED',
+    });
+    expect(deps.guilds.updateSetupState).not.toHaveBeenCalled();
+
+    deps.security.getFirewallSettings = vi.fn().mockResolvedValue({ configured: true });
+    await service.advanceStep('100', 'owner');
+
+    expect(deps.guilds.updateSetupState).toHaveBeenCalledWith('100', 'BACKUPS', [
+      'WELCOME',
+      'HEALTH',
+      'STAFF',
+      'POLICIES',
+      'LOGGING',
+      'PROTECTION',
     ]);
   });
 

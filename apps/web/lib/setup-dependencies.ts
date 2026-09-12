@@ -23,6 +23,7 @@ export function createWebSetupServices(input: {
       managers: input.repositories.managers,
       staff: input.repositories.staff,
       securityLedger: input.repositories.securityLedger,
+      security: input.repositories.security,
       discord: input.discord,
     }),
     migrations: new GuardedMigrationService({

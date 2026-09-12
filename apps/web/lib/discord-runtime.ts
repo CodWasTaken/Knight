@@ -13,11 +13,20 @@ export type WebDiscordAdapter = Pick<
   | 'listTextChannels'
   | 'canSendToChannel'
   | 'sendChannelMessage'
+  | 'getMemberState'
 >;
+
+export type WebDiscordAdapterWithProtection = WebDiscordAdapter &
+  Readonly<{
+    getGuildChannelState(
+      guildId: string,
+      channelId: string,
+    ): Promise<{ channelId: string; name: string } | null>;
+  }>;
 
 export function getWebDiscordAdapter(
   runtime: WebRuntime = getWebRuntime(),
-): WebDiscordAdapter | null {
+): WebDiscordAdapterWithProtection | null {
   const token = runtime.env.DISCORD_TOKEN;
   if (!token) return null;
   return createDiscordRestSetupAdapter(token);

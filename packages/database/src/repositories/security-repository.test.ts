@@ -120,6 +120,15 @@ describe('security persistence', () => {
       trustState: 'APPROVED',
     });
     expect(await security.getBotInventory('g2', 'bot-1')).toBeNull();
+
+    expect(await security.listBotInventory('g1')).toEqual([
+      expect.objectContaining({ botUserId: 'bot-1', trustState: 'BLOCKED' }),
+    ]);
+    expect(await security.listWebhookInventory('g2')).toEqual([]);
+    expect(await security.setBotTrustState('g2', 'bot-1', 'TRUSTED')).toBeNull();
+    expect(await security.setWebhookTrustState('g1', 'webhook-1', 'BLOCKED')).toMatchObject({
+      trustState: 'BLOCKED',
+    });
   });
 
   it('groups incidents by guild and actor within a five-minute window', async () => {
@@ -156,5 +165,26 @@ describe('security persistence', () => {
     expect(grouped.eventCount).toBe(2);
     expect(later.id).not.toBe(first.id);
     expect(otherGuild.id).not.toBe(first.id);
+    expect(await security.listActiveIncidents('g1')).toEqual([
+      expect.objectContaining({ id: later.id }),
+      expect.objectContaining({ id: first.id, eventCount: 2 }),
+    ]);
+  });
+
+  it('lists protected resources only for the requested guild', async () => {
+    await security.saveProtection({
+      guildId: 'g1',
+      resourceType: 'ROLE',
+      resourceId: 'role-9',
+      level: ProtectionLevel.Critical,
+      updatedBy: 'owner-1',
+    });
+
+    expect(await security.listProtectedResources('g1')).toEqual([
+      expect.objectContaining({ resourceType: 'ROLE', resourceId: 'role-9' }),
+    ]);
+    expect(await security.listProtectedResources('g2')).toEqual([
+      expect.objectContaining({ resourceType: 'USER', resourceId: '42' }),
+    ]);
   });
 });

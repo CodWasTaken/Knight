@@ -11,12 +11,16 @@ Knight starts in Observe so you can confirm service health, Discord hierarchy, S
 3. Open the dashboard and create Staff Profiles by mapping existing manageable Discord roles and assigning a Knight rank.
 4. Configure only the moderation capabilities each profile needs and set independent per-action limits.
 5. Open **Logging** and explicitly save the Security and Moderation notification destinations. Either destination may be **Disabled**; PostgreSQL remains the authoritative Security Ledger.
-6. Assign staff with `/staff assign user:<member> profile:<profile>` and confirm state with `/staff inspect user:<member>`.
-7. Add explicit Knight Security Managers only where needed. Discord Administrator alone does not grant Knight management authority.
-8. Move from Observe to Test.
-9. Exercise Knight's moderation commands with controlled test targets/messages before Guarded.
+6. Open **Security**, choose the bot and webhook firewall modes, and save them once. Observe is the safe default. Enforce removes only inventory entries you explicitly mark Blocked.
+7. Add existing users, roles, or channels under **Protected** only where a stronger target rule is useful.
+8. Assign staff with `/staff assign user:<member> profile:<profile>` and confirm state with `/staff inspect user:<member>`.
+9. Add explicit Knight Security Managers only where needed. Discord Administrator alone does not grant Knight management authority.
+10. Move from Observe to Test.
+11. Exercise Knight's moderation commands with controlled test targets/messages before Guarded.
 
 The setup wizard will not advance past `LOGGING` until logging settings have been saved once. Saving both destinations as **Disabled** satisfies this gate and does not require Knight to create or access a Discord notification channel.
+
+The wizard will not advance past `PROTECTION` until the firewall modes have been saved once. Explicitly saving Observe for both firewalls satisfies this gate; protected resources are optional.
 
 ## Moderation command surface
 

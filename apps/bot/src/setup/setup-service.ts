@@ -33,6 +33,9 @@ export interface SetupDependencies {
   securityLedger: {
     getLoggingSettings(guildId: string): Promise<unknown | null>;
   };
+  security: {
+    getFirewallSettings(guildId: string): Promise<{ configured: boolean }>;
+  };
   discord: {
     getGuildState(guildId: string): Promise<{
       guildId: string;
@@ -164,6 +167,15 @@ export class SetupService {
       throw new SetupError(
         'LOGGING_NOT_CONFIGURED',
         'Configure logging destinations before continuing. Choosing Disabled is valid.',
+      );
+    }
+    if (
+      setup.step === 'PROTECTION' &&
+      !(await this.dependencies.security.getFirewallSettings(guildId)).configured
+    ) {
+      throw new SetupError(
+        'PROTECTION_NOT_CONFIGURED',
+        'Save the bot and webhook firewall modes before continuing. Observe is valid.',
       );
     }
     const completed = [...new Set<SetupStep>([...setup.completedSteps, setup.step])];

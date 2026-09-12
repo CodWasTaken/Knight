@@ -1,6 +1,6 @@
 import { REST } from '@discordjs/rest';
 import { ChannelType, PermissionFlagsBits, Routes } from 'discord-api-types/v10';
-import type { DiscordGuildState, DiscordTextChannelState } from './port.js';
+import type { DiscordGuildState, DiscordMemberState, DiscordTextChannelState } from './port.js';
 
 const ALL_KNOWN_PERMISSIONS = Object.values(PermissionFlagsBits).reduce(
   (combined, permission) => combined | permission,
@@ -110,6 +110,63 @@ export class DiscordRestSetupAdapter {
           channel.type === ChannelType.GuildText || channel.type === ChannelType.GuildAnnouncement,
       )
       .map((channel) => ({ channelId: channel.id, name: channel.name ?? channel.id }));
+  }
+
+  public async getMemberState(guildId: string, userId: string): Promise<DiscordMemberState | null> {
+    try {
+      const [guildRaw, memberRaw, rolesRaw] = await Promise.all([
+        this.rest.get(Routes.guild(guildId)),
+        this.rest.get(Routes.guildMember(guildId, userId)),
+        this.rest.get(Routes.guildRoles(guildId)),
+      ]);
+      const guild = asGuild(guildRaw);
+      const member = asMember(memberRaw);
+      const roles = asRoles(rolesRaw).filter(
+        (role) => role.id === guildId || member.roles.includes(role.id),
+      );
+      let permissions = roles.reduce((combined, role) => combined | BigInt(role.permissions), 0n);
+      if ((permissions & PermissionFlagsBits.Administrator) === PermissionFlagsBits.Administrator) {
+        permissions = ALL_KNOWN_PERMISSIONS;
+      }
+      return {
+        userId,
+        isGuildOwner: guild.owner_id === userId,
+        roleIds: member.roles,
+        highestRolePosition: Math.max(0, ...roles.map((role) => role.position)),
+        permissions,
+      };
+    } catch (error) {
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        (error as { code?: unknown }).code === 10_007
+      ) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  public async getGuildChannelState(
+    guildId: string,
+    channelId: string,
+  ): Promise<{ channelId: string; name: string } | null> {
+    try {
+      const channel = asChannel(await this.rest.get(Routes.channel(channelId)));
+      if (channel.guild_id !== guildId) return null;
+      return { channelId: channel.id, name: channel.name ?? channel.id };
+    } catch (error) {
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        (error as { code?: unknown }).code === 10_003
+      ) {
+        return null;
+      }
+      throw error;
+    }
   }
 
   public async canSendToChannel(guildId: string, channelId: string): Promise<boolean> {

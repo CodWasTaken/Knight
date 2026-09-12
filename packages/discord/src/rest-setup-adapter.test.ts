@@ -138,6 +138,36 @@ describe('DiscordRestSetupAdapter', () => {
     expect(await adapter.canSendToChannel('100', 'blocked')).toBe(false);
   });
 
+  it('validates guild members and guild channels for protected resources', async () => {
+    const get = vi.fn().mockImplementation(async (route: string) => {
+      if (route === Routes.guild('100')) return { id: '100', owner_id: 'owner' };
+      if (route === Routes.guildMember('100', '555')) return { roles: ['staff'] };
+      if (route === Routes.guildRoles('100'))
+        return [
+          { id: '100', name: '@everyone', managed: false, position: 0, permissions: '1' },
+          { id: 'staff', name: 'Staff', managed: false, position: 20, permissions: '4' },
+        ];
+      if (route === Routes.channel('666'))
+        return { id: '666', guild_id: '100', name: 'Category', type: 4 };
+      if (route === Routes.channel('777'))
+        return { id: '777', guild_id: '200', name: 'Elsewhere', type: 0 };
+      throw new Error(`unexpected route ${route}`);
+    });
+    const adapter = new DiscordRestSetupAdapter({ get, patch: vi.fn() });
+
+    await expect(adapter.getMemberState('100', '555')).resolves.toMatchObject({
+      userId: '555',
+      roleIds: ['staff'],
+      highestRolePosition: 20,
+      permissions: 5n,
+    });
+    await expect(adapter.getGuildChannelState('100', '666')).resolves.toEqual({
+      channelId: '666',
+      name: 'Category',
+    });
+    await expect(adapter.getGuildChannelState('100', '777')).resolves.toBeNull();
+  });
+
   it('sends channel notifications through the REST API', async () => {
     const post = vi.fn().mockResolvedValue(undefined);
     const adapter = new DiscordRestSetupAdapter({
