@@ -219,6 +219,132 @@ describe('RestoreService', () => {
     expect(made.backups.completeRestore).toHaveBeenCalledWith({ guildId: '100', jobId: 'job-1' });
   });
 
+  it('reconciles a role created before a lost Discord response instead of duplicating it', async () => {
+    const made = makeService();
+    const desiredRole = {
+      id: 'old-role', name: 'Staff', managed: false, permissions: '8', position: 2,
+      color: 0, hoist: false, mentionable: false,
+    };
+    const preview: RestorePreview = {
+      guildId: '100', backupCreatedAt: '2026-09-12T10:00:00.000Z',
+      operations: [{ kind: 'ROLE', classification: 'RECREATE', sourceId: 'old-role', role: desiredRole }],
+    };
+    const guardedCheckpoint = {
+      nextOperationIndex: 0, roleIdMap: {}, channelIdMap: {},
+      recreateGuard: {
+        kind: 'ROLE', sourceId: 'old-role', knownIds: ['preexisting-role'],
+        markerName: 'knight-recovery-job-1-old-role',
+      },
+    };
+    made.backups.getRecoveryJobById
+      .mockResolvedValueOnce(runningJob({ phase: 'EXECUTION', preview, confirmedBy: 'owner-1' }))
+      .mockResolvedValueOnce(runningJob({
+        phase: 'EXECUTION', preview, confirmedBy: 'owner-1', checkpoint: guardedCheckpoint,
+      }));
+    const preexistingRole = { ...desiredRole, id: 'preexisting-role', name: 'Other' };
+    made.discord.captureGuild
+      .mockResolvedValueOnce({ guildId: '100', roles: [preexistingRole], channels: [] })
+      .mockResolvedValueOnce({
+        guildId: '100',
+        roles: [preexistingRole, {
+          ...desiredRole, id: 'created-role', name: 'knight-recovery-job-1-old-role',
+        }],
+        channels: [],
+      });
+    made.discord.createRole.mockRejectedValueOnce(new Error('response lost after create'));
+
+    await made.service.processExecutionJob('job-1');
+
+    expect(made.backups.updateRestoreCheckpoint).toHaveBeenCalledWith({
+      guildId: '100', jobId: 'job-1', checkpoint: guardedCheckpoint,
+    });
+    expect(made.discord.createRole).toHaveBeenCalledTimes(1);
+
+    await made.service.processExecutionJob('job-1');
+
+    expect(made.discord.createRole).toHaveBeenCalledTimes(1);
+    expect(made.discord.updateRole).toHaveBeenCalledWith(
+      '100', 'created-role', desiredRole, expect.stringContaining('job-1'),
+    );
+    expect(made.backups.updateRestoreCheckpoint).toHaveBeenLastCalledWith({
+      guildId: '100', jobId: 'job-1',
+      checkpoint: {
+        nextOperationIndex: 1, roleIdMap: { 'old-role': 'created-role' }, channelIdMap: {},
+      },
+    });
+    expect(made.backups.completeRestore).toHaveBeenCalledWith({ guildId: '100', jobId: 'job-1' });
+  });
+
+  it('reconciles a channel created before a lost Discord response instead of duplicating it', async () => {
+    const made = makeService();
+    const desiredChannel = {
+      id: 'old-channel', name: 'general', type: 'TEXT' as const, parentId: null, position: 1,
+      permissionOverwrites: [],
+    };
+    const preview: RestorePreview = {
+      guildId: '100', backupCreatedAt: '2026-09-12T10:00:00.000Z',
+      operations: [{
+        kind: 'CHANNEL', classification: 'RECREATE', sourceId: 'old-channel', channel: desiredChannel,
+      }],
+    };
+    const guardedCheckpoint = {
+      nextOperationIndex: 0, roleIdMap: {}, channelIdMap: {},
+      recreateGuard: {
+        kind: 'CHANNEL', sourceId: 'old-channel', knownIds: ['preexisting-channel'],
+        markerName: 'knight-recovery-job-1-old-channel',
+      },
+    };
+    made.backups.getRecoveryJobById
+      .mockResolvedValueOnce(runningJob({ phase: 'EXECUTION', preview, confirmedBy: 'owner-1' }))
+      .mockResolvedValueOnce(runningJob({
+        phase: 'EXECUTION', preview, confirmedBy: 'owner-1', checkpoint: guardedCheckpoint,
+      }));
+    const preexistingChannel = { ...desiredChannel, id: 'preexisting-channel', name: 'other' };
+    made.discord.captureGuild
+      .mockResolvedValueOnce({ guildId: '100', roles: [], channels: [preexistingChannel] })
+      .mockResolvedValueOnce({
+        guildId: '100', roles: [],
+        channels: [preexistingChannel, {
+          ...desiredChannel, id: 'created-channel', name: 'knight-recovery-job-1-old-channel',
+        }],
+      });
+    made.discord.createChannel.mockRejectedValueOnce(new Error('response lost after create'));
+
+    await made.service.processExecutionJob('job-1');
+
+    expect(made.backups.updateRestoreCheckpoint).toHaveBeenCalledWith({
+      guildId: '100', jobId: 'job-1', checkpoint: guardedCheckpoint,
+    });
+    expect(made.discord.createChannel).toHaveBeenCalledTimes(1);
+
+    await made.service.processExecutionJob('job-1');
+
+    expect(made.discord.createChannel).toHaveBeenCalledTimes(1);
+    expect(made.discord.updateChannel).toHaveBeenCalledWith(
+      'created-channel', desiredChannel, expect.stringContaining('job-1'),
+    );
+    expect(made.backups.updateRestoreCheckpoint).toHaveBeenLastCalledWith({
+      guildId: '100', jobId: 'job-1',
+      checkpoint: {
+        nextOperationIndex: 1, roleIdMap: {}, channelIdMap: { 'old-channel': 'created-channel' },
+      },
+    });
+    expect(made.backups.completeRestore).toHaveBeenCalledWith({ guildId: '100', jobId: 'job-1' });
+  });
+
+  it('keeps a completed recovery completed when lock release fails', async () => {
+    const made = makeService();
+    made.backups.getRecoveryJobById.mockResolvedValueOnce(runningJob({
+      phase: 'EXECUTION', preview: executionPreview(), confirmedBy: 'owner-1',
+    }));
+    made.locks.release.mockRejectedValueOnce(new Error('Redis unavailable'));
+
+    await made.service.processExecutionJob('job-1');
+
+    expect(made.backups.completeRestore).toHaveBeenCalledWith({ guildId: '100', jobId: 'job-1' });
+    expect(made.backups.failRestore).not.toHaveBeenCalled();
+  });
+
   it('does not execute writes when the per-guild recovery lock is already held', async () => {
     const made = makeService();
     made.backups.getRecoveryJobById.mockResolvedValueOnce(runningJob({

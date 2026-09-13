@@ -225,4 +225,51 @@ describe('backup persistence', () => {
     expect(await backups.getRecoveryJob('g1', job.id)).toMatchObject({ status: 'COMPLETED', error: null });
   });
 
+
+  it('recovers interrupted jobs safely after a worker restart', async () => {
+    const runningBackup = await backups.enqueueBackup({ guildId: 'g1', requestedBy: 'owner-1' });
+    await backups.claimPendingBackup();
+
+    const previewBackup = await backups.enqueueBackup({ guildId: 'g2', requestedBy: 'owner-2' });
+    await backups.completeBackup({ guildId: 'g2', backupId: previewBackup.id, relativePath: 'g2/preview.json.gz', sha256: '7'.repeat(64) });
+    const preview = await backups.enqueueRestorePreview({ guildId: 'g2', backupId: previewBackup.id, requestedBy: 'owner-2' });
+    await backups.claimPendingRestore();
+
+    const executionBackup = await backups.enqueueBackup({ guildId: 'g3', requestedBy: 'owner-3' });
+    await backups.completeBackup({ guildId: 'g3', backupId: executionBackup.id, relativePath: 'g3/execution.json.gz', sha256: '8'.repeat(64) });
+    const execution = await backups.enqueueRestorePreview({ guildId: 'g3', backupId: executionBackup.id, requestedBy: 'owner-3' });
+    await backups.claimPendingRestore();
+    await backups.saveRestorePreview({ guildId: 'g3', jobId: execution.id, preview: { operations: [] } });
+    await backups.confirmRestore({ guildId: 'g3', jobId: execution.id, confirmedBy: 'owner-3' });
+    await backups.claimPendingRestore();
+    const checkpoint = { nextOperationIndex: 2, roleIdMap: { old: 'new' }, channelIdMap: {} };
+    await backups.updateRestoreCheckpoint({ guildId: 'g3', jobId: execution.id, checkpoint });
+
+    await backups.recoverInterruptedJobs(new Date('2026-09-13T12:00:00.000Z'));
+
+    expect(await backups.getBackup('g1', runningBackup.id)).toMatchObject({ status: 'PENDING', startedAt: null });
+    expect(await backups.getRecoveryJob('g2', preview.id)).toMatchObject({ phase: 'PREVIEW', status: 'PENDING', startedAt: null });
+    expect(await backups.getRecoveryJob('g3', execution.id)).toMatchObject({
+      phase: 'EXECUTION',
+      status: 'FAILED',
+      checkpoint,
+      error: 'Recovery execution interrupted by worker restart; owner retry required.',
+    });
+  });
+
+
+  it('backs off failed Daily backup attempts before retrying', async () => {
+    await backups.savePolicy({ guildId: 'g1', mode: 'DAILY', archiveChannelIds: [], updatedBy: 'owner-1' });
+    const failed = await backups.enqueueBackup({ guildId: 'g1', requestedBy: 'SYSTEM' });
+    await backups.failBackup({ guildId: 'g1', backupId: failed.id, error: 'Discord capture failed' });
+    const failedRecord = await backups.getBackup('g1', failed.id);
+    if (failedRecord === null) throw new Error('Failed backup missing');
+
+    const beforeBackoff = new Date(failedRecord.updatedAt.getTime() + 59 * 60_000);
+    const afterBackoff = new Date(failedRecord.updatedAt.getTime() + 61 * 60_000);
+
+    expect(await backups.listDueDailyPolicies(beforeBackoff)).toEqual([]);
+    expect((await backups.listDueDailyPolicies(afterBackoff)).map((policy) => policy.guildId)).toContain('g1');
+  });
+
 });

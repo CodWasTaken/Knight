@@ -24,7 +24,7 @@ type WorkerRedis = {
   ping(): Promise<string>;
   quit(): Promise<unknown>;
 };
-type WorkerBackupService = { runTick(now: Date): Promise<void> };
+type WorkerBackupService = { recoverInterruptedJobs(): Promise<void>; runTick(now: Date): Promise<void> };
 type ParsedEnv = ReturnType<typeof parseEnv>;
 
 export type WorkerDependencies = Readonly<{
@@ -95,6 +95,13 @@ export async function startWorker(
   }
 
   const backupService = dependencies.createBackupService({ database, redis, env });
+  try {
+    await backupService.recoverInterruptedJobs();
+  } catch (error) {
+    await shutdown();
+    throw error;
+  }
+
   const tick = (): void => {
     if (closed || activeTick !== null) return;
     const promise = backupService

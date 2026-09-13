@@ -84,6 +84,33 @@ describe('planRestore', () => {
     }));
   });
 
+  it('omits channel overwrites that target a missing managed role', () => {
+    const backup = snapshot({
+      discord: {
+        guildId: '100',
+        roles: [role({ id: 'managed-role', managed: true })],
+        channels: [channel({
+          permissionOverwrites: [
+            { id: 'managed-role', type: 'ROLE', allow: '8', deny: '0' },
+            { id: 'member-1', type: 'MEMBER', allow: '0', deny: '8' },
+          ],
+        })],
+      },
+    });
+    const current = { guildId: '100', roles: [], channels: [channel({ permissionOverwrites: [] })] };
+
+    const preview = planRestore(backup, current);
+
+    expect(preview.operations).toContainEqual(expect.objectContaining({
+      kind: 'ROLE', sourceId: 'managed-role', classification: 'NOT_RECOVERABLE',
+    }));
+    expect(preview.operations).toContainEqual(expect.objectContaining({
+      kind: 'OVERWRITES',
+      sourceChannelId: 'channel-1',
+      overwrites: [{ id: 'member-1', type: 'MEMBER', allow: '0', deny: '8' }],
+    }));
+  });
+
   it('marks archived messages as evidence-only ARCHIVE_ONLY operations', () => {
     const backup = snapshot({
       messageArchives: [{

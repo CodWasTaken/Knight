@@ -42,6 +42,30 @@ export class BackupRepository {
     return record;
   }
 
+  public async recoverInterruptedJobs(now = new Date()): Promise<void> {
+    await this.database.db.transaction(async (tx) => {
+      await tx
+        .update(backups)
+        .set({ status: 'PENDING', startedAt: null, completedAt: null, error: null, updatedAt: now })
+        .where(eq(backups.status, 'RUNNING'));
+
+      await tx
+        .update(recoveryJobs)
+        .set({ status: 'PENDING', startedAt: null, completedAt: null, error: null, updatedAt: now })
+        .where(and(eq(recoveryJobs.phase, 'PREVIEW'), eq(recoveryJobs.status, 'RUNNING')));
+
+      await tx
+        .update(recoveryJobs)
+        .set({
+          status: 'FAILED',
+          error: 'Recovery execution interrupted by worker restart; owner retry required.',
+          completedAt: now,
+          updatedAt: now,
+        })
+        .where(and(eq(recoveryJobs.phase, 'EXECUTION'), eq(recoveryJobs.status, 'RUNNING')));
+    });
+  }
+
   public async getPolicy(guildId: string): Promise<BackupPolicyRecord | null> {
     const [record] = await this.database.db
       .select()
@@ -53,6 +77,7 @@ export class BackupRepository {
 
   public async listDueDailyPolicies(now: Date): Promise<BackupPolicyRecord[]> {
     const cutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const retryCutoff = new Date(now.getTime() - 60 * 60 * 1000);
     return this.database.db
       .select()
       .from(backupPolicies)
@@ -69,6 +94,7 @@ export class BackupRepository {
                   or(
                     inArray(backups.status, ['PENDING', 'RUNNING']),
                     and(eq(backups.status, 'COMPLETED'), gte(backups.completedAt, cutoff)),
+                    and(eq(backups.status, 'FAILED'), gte(backups.updatedAt, retryCutoff)),
                   ),
                 ),
               ),

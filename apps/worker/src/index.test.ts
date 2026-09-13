@@ -17,6 +17,7 @@ describe('startWorker', () => {
     const end = vi.fn().mockResolvedValue(undefined);
     const ping = vi.fn().mockResolvedValue('PONG');
     const quit = vi.fn().mockResolvedValue('OK');
+    const recoverInterruptedJobs = vi.fn().mockResolvedValue(undefined);
     const runTick = vi.fn().mockResolvedValue(undefined);
     const clearInterval = vi.fn();
     let intervalHandler: (() => void) | undefined;
@@ -24,7 +25,7 @@ describe('startWorker', () => {
 
     const database = { pool: { query, end } };
     const redis = { ping, quit };
-    const createBackupService = vi.fn(() => ({ runTick }));
+    const createBackupService = vi.fn(() => ({ recoverInterruptedJobs, runTick }));
     await startWorker(validEnv, {
       createDatabase: vi.fn(() => database),
       createRedis: vi.fn(() => redis),
@@ -43,6 +44,7 @@ describe('startWorker', () => {
     expect(query).toHaveBeenCalledWith('select 1');
     expect(ping).toHaveBeenCalledTimes(1);
     expect(createBackupService).toHaveBeenCalledWith({ database, redis, env: expect.any(Object) });
+    expect(recoverInterruptedJobs).toHaveBeenCalledTimes(1);
     expect(intervalHandler).toBeTypeOf('function');
     intervalHandler?.();
     await vi.waitFor(() => expect(runTick).toHaveBeenCalledTimes(1));

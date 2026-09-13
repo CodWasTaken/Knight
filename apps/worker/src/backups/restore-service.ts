@@ -28,10 +28,17 @@ type BackupRecord = Readonly<{
   relativePath: string | null;
   sha256: string | null;
 }>;
+type RecreateGuard = Readonly<{
+  kind: 'ROLE' | 'CATEGORY' | 'CHANNEL';
+  sourceId: string;
+  knownIds: readonly string[];
+  markerName: string;
+}>;
 type RestoreCheckpoint = Readonly<{
   nextOperationIndex: number;
   roleIdMap: Readonly<Record<string, string>>;
   channelIdMap: Readonly<Record<string, string>>;
+  recreateGuard?: RecreateGuard;
 }>;
 
 type RestoreDependencies = Readonly<{
@@ -102,13 +109,16 @@ function asCheckpoint(value: unknown): RestoreCheckpoint {
     return { nextOperationIndex: 0, roleIdMap: {}, channelIdMap: {} };
   }
   const checkpoint = value as Partial<RestoreCheckpoint>;
-  return {
+  const normalized = {
     nextOperationIndex: Number.isInteger(checkpoint.nextOperationIndex)
       ? Math.max(0, checkpoint.nextOperationIndex ?? 0)
       : 0,
     roleIdMap: checkpoint.roleIdMap ?? {},
     channelIdMap: checkpoint.channelIdMap ?? {},
   };
+  return checkpoint.recreateGuard === undefined
+    ? normalized
+    : { ...normalized, recreateGuard: checkpoint.recreateGuard };
 }
 function roleId(sourceId: string, checkpoint: RestoreCheckpoint): string {
   return checkpoint.roleIdMap[sourceId] ?? sourceId;
@@ -152,6 +162,14 @@ function nextCheckpoint(
 
 function auditReason(jobId: string, operation: RestoreOperation): string {
   return `Knight recovery ${jobId}: ${operation.kind}`;
+}
+
+function recreateMarkerName(jobId: string, sourceId: string): string {
+  return `knight-recovery-${jobId}-${sourceId}`
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, '-')
+    .replace(/-+/g, '-')
+    .slice(0, 100);
 }
 
 export class RestoreService {
@@ -223,6 +241,54 @@ export class RestoreService {
     }
   }
 
+  private async prepareRecreateGuard(
+    job: RecoveryJob,
+    kind: RecreateGuard['kind'],
+    sourceId: string,
+    checkpoint: RestoreCheckpoint,
+  ): Promise<Readonly<{ checkpoint: RestoreCheckpoint; current: StructuralBackupPayload['discord'] }>> {
+    const current = await this.dependencies.discord.captureGuild(job.guildId);
+    if (checkpoint.recreateGuard !== undefined) {
+      if (
+        checkpoint.recreateGuard.kind !== kind ||
+        checkpoint.recreateGuard.sourceId !== sourceId
+      ) {
+        throw new Error('Recovery recreate checkpoint does not match the pending operation');
+      }
+      return { checkpoint, current };
+    }
+
+    const knownIds = kind === 'ROLE'
+      ? current.roles.map((role) => role.id)
+      : current.channels.map((channel) => channel.id);
+    const guarded: RestoreCheckpoint = {
+      ...checkpoint,
+      recreateGuard: {
+        kind,
+        sourceId,
+        knownIds,
+        markerName: recreateMarkerName(job.id, sourceId),
+      },
+    };
+    await this.dependencies.backups.updateRestoreCheckpoint({
+      guildId: job.guildId,
+      jobId: job.id,
+      checkpoint: guarded as unknown as Record<string, unknown>,
+    });
+    return { checkpoint: guarded, current };
+  }
+
+  private async persistMappedCheckpoint(
+    job: RecoveryJob,
+    checkpoint: RestoreCheckpoint,
+  ): Promise<void> {
+    await this.dependencies.backups.updateRestoreCheckpoint({
+      guildId: job.guildId,
+      jobId: job.id,
+      checkpoint: checkpoint as unknown as Record<string, unknown>,
+    });
+  }
+
   private async executeOperation(
     job: RecoveryJob,
     operation: RestoreOperation,
@@ -233,14 +299,46 @@ export class RestoreService {
       case 'ROLE': {
         if (operation.classification === 'NOT_RECOVERABLE') return checkpoint;
         if (operation.classification === 'RECREATE') {
-          const created = await this.dependencies.discord.createRole(
-            job.guildId,
-            operation.role,
-            reason,
+          const mappedRoleId = checkpoint.roleIdMap[operation.sourceId];
+          if (mappedRoleId !== undefined) {
+            await this.dependencies.discord.updateRole(
+              job.guildId, mappedRoleId, operation.role, reason,
+            );
+            return checkpoint;
+          }
+
+          const prepared = await this.prepareRecreateGuard(
+            job, 'ROLE', operation.sourceId, checkpoint,
           );
-          return nextCheckpoint(checkpoint, checkpoint.nextOperationIndex, {
-            roleIdMap: { ...checkpoint.roleIdMap, [operation.sourceId]: created.id },
-          });
+          const guard = prepared.checkpoint.recreateGuard;
+          if (guard === undefined) throw new Error('Recovery recreate guard is missing');
+          const knownIds = new Set(guard.knownIds);
+          const candidates = prepared.current.roles.filter(
+            (role) => !knownIds.has(role.id) && !role.managed && role.name === guard.markerName,
+          );
+          if (candidates.length > 1) {
+            throw new Error('Recovery role recreation is ambiguous');
+          }
+          const createdId = candidates[0]?.id ?? (await this.dependencies.discord.createRole(
+            job.guildId,
+            { ...operation.role, name: guard.markerName },
+            reason,
+          )).id;
+          const mappedCheckpoint = nextCheckpoint(
+            prepared.checkpoint,
+            prepared.checkpoint.nextOperationIndex,
+            {
+              roleIdMap: {
+                ...prepared.checkpoint.roleIdMap,
+                [operation.sourceId]: createdId,
+              },
+            },
+          );
+          await this.persistMappedCheckpoint(job, mappedCheckpoint);
+          await this.dependencies.discord.updateRole(
+            job.guildId, createdId, operation.role, reason,
+          );
+          return mappedCheckpoint;
         }
         await this.dependencies.discord.updateRole(
           job.guildId,
@@ -262,10 +360,45 @@ export class RestoreService {
       case 'CHANNEL': {
         const channel = remapChannel(operation.channel, checkpoint);
         if (operation.classification === 'RECREATE') {
-          const created = await this.dependencies.discord.createChannel(job.guildId, channel, reason);
-          return nextCheckpoint(checkpoint, checkpoint.nextOperationIndex, {
-            channelIdMap: { ...checkpoint.channelIdMap, [operation.sourceId]: created.id },
-          });
+          const mappedChannelId = checkpoint.channelIdMap[operation.sourceId];
+          if (mappedChannelId !== undefined) {
+            await this.dependencies.discord.updateChannel(mappedChannelId, channel, reason);
+            return checkpoint;
+          }
+
+          const prepared = await this.prepareRecreateGuard(
+            job, operation.kind, operation.sourceId, checkpoint,
+          );
+          const guard = prepared.checkpoint.recreateGuard;
+          if (guard === undefined) throw new Error('Recovery recreate guard is missing');
+          const knownIds = new Set(guard.knownIds);
+          const candidates = prepared.current.channels.filter(
+            (candidate) =>
+              !knownIds.has(candidate.id) &&
+              candidate.type === channel.type &&
+              candidate.name === guard.markerName,
+          );
+          if (candidates.length > 1) {
+            throw new Error('Recovery channel recreation is ambiguous');
+          }
+          const createdId = candidates[0]?.id ?? (await this.dependencies.discord.createChannel(
+            job.guildId,
+            { ...channel, name: guard.markerName },
+            reason,
+          )).id;
+          const mappedCheckpoint = nextCheckpoint(
+            prepared.checkpoint,
+            prepared.checkpoint.nextOperationIndex,
+            {
+              channelIdMap: {
+                ...prepared.checkpoint.channelIdMap,
+                [operation.sourceId]: createdId,
+              },
+            },
+          );
+          await this.persistMappedCheckpoint(job, mappedCheckpoint);
+          await this.dependencies.discord.updateChannel(createdId, channel, reason);
+          return mappedCheckpoint;
         }
         await this.dependencies.discord.updateChannel(
           channelId(operation.sourceId, checkpoint),
@@ -403,7 +536,7 @@ export class RestoreService {
           error: errorMessage(error),
         });
       } finally {
-        await this.dependencies.locks.release(lockKey, token);
+        await this.dependencies.locks.release(lockKey, token).catch(() => false);
       }
     } catch (error) {
       await this.dependencies.backups.failRestore({

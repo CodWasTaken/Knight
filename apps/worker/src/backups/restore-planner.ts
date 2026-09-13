@@ -162,13 +162,15 @@ export function planRestore(
   const currentChannels = mapById(current.channels);
   const operations: RestoreOperation[] = [];
   const recreatedRoleIds = new Set<string>();
+  const unrecoverableManagedRoleIds = new Set<string>();
   const recreatedChannelIds = new Set<string>();
   for (const role of snapshot.discord.roles) {
     const existing = currentRoles.get(role.id);
     if (existing === undefined) {
       const classification = role.managed ? 'NOT_RECOVERABLE' : 'RECREATE';
       operations.push({ kind: 'ROLE', classification, sourceId: role.id, role });
-      if (!role.managed) recreatedRoleIds.add(role.id);
+      if (role.managed) unrecoverableManagedRoleIds.add(role.id);
+      else recreatedRoleIds.add(role.id);
       continue;
     }
     if (!role.managed && roleNeedsRevert(role, existing)) {
@@ -219,15 +221,19 @@ export function planRestore(
   }
   for (const channel of snapshot.discord.channels) {
     const existing = currentChannels.get(channel.id);
+    const recoverableOverwrites = channel.permissionOverwrites.filter(
+      (overwrite) =>
+        overwrite.type !== 'ROLE' || !unrecoverableManagedRoleIds.has(overwrite.id),
+    );
     if (
       existing === undefined ||
-      !overwritesEqual(channel.permissionOverwrites, existing.permissionOverwrites)
+      !overwritesEqual(recoverableOverwrites, existing.permissionOverwrites)
     ) {
       operations.push({
         kind: 'OVERWRITES',
         classification: 'REVERT',
         sourceChannelId: channel.id,
-        overwrites: channel.permissionOverwrites,
+        overwrites: recoverableOverwrites,
       });
     }
   }

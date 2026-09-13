@@ -7,6 +7,7 @@ function makeJob(overrides: Record<string, unknown> = {}) {
 
 function makeService(options: { archiveEnabled?: boolean; policy?: unknown; captureError?: Error } = {}) {
   const backups = {
+    recoverInterruptedJobs: vi.fn().mockResolvedValue(undefined),
     listDueDailyPolicies: vi.fn().mockResolvedValue([]),
     enqueueBackup: vi.fn().mockResolvedValue(makeJob({ status: 'PENDING' })),
     claimPendingBackup: vi.fn().mockResolvedValue(makeJob()),
@@ -61,6 +62,16 @@ function makeService(options: { archiveEnabled?: boolean; policy?: unknown; capt
 }
 
 describe('BackupService', () => {
+  it('recovers interrupted jobs using the worker clock', async () => {
+    const { service, backups } = makeService();
+
+    await service.recoverInterruptedJobs();
+
+    expect(backups.recoverInterruptedJobs).toHaveBeenCalledWith(
+      new Date('2026-09-12T12:00:00.000Z'),
+    );
+  });
+
   it('enqueues each Daily policy currently due', async () => {
     const { service, backups } = makeService();
     backups.listDueDailyPolicies.mockResolvedValue([{ guildId: '100' }, { guildId: '200' }]);

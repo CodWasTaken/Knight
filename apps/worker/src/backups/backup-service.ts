@@ -9,6 +9,7 @@ export type BackupJob = Readonly<{ id: string; guildId: string }>;
 
 type BackupDependencies = Readonly<{
   backups: {
+    recoverInterruptedJobs(now?: Date): Promise<void>;
     listDueDailyPolicies(now: Date): Promise<readonly { guildId: string }[]>;
     enqueueBackup(input: { guildId: string; requestedBy: string }): Promise<unknown>;
     claimPendingBackup(): Promise<BackupJob | null>;
@@ -84,6 +85,10 @@ function protectedReference(resource: {
 
 export class BackupService {
   public constructor(private readonly dependencies: BackupDependencies) {}
+
+  public async recoverInterruptedJobs(): Promise<void> {
+    await this.dependencies.backups.recoverInterruptedJobs(this.dependencies.now());
+  }
 
   public async runDueDaily(now: Date): Promise<void> {
     const due = await this.dependencies.backups.listDueDailyPolicies(now);
