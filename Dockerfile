@@ -4,8 +4,8 @@ ENV COREPACK_HOME=/home/node/.cache/node/corepack
 
 WORKDIR /app
 
-RUN mkdir -p "$COREPACK_HOME" \
-  && chown -R node:node /home/node/.cache /app \
+RUN mkdir -p "$COREPACK_HOME" /data/knight-backups \
+  && chown -R node:node /home/node/.cache /app /data/knight-backups \
   && corepack enable
 
 COPY --chown=node:node . .

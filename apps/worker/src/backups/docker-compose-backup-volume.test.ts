@@ -15,4 +15,13 @@ describe('Docker Compose backup storage', () => {
     expect(bot).not.toContain('knight-backups');
     expect(web).not.toContain('knight-backups');
   });
+
+  it('prepares the backup mount path for the non-root node user before USER node', async () => {
+    const dockerfile = await readFile(resolve(process.cwd(), '../../Dockerfile'), 'utf8');
+    const userNode = dockerfile.indexOf('USER node');
+
+    expect(dockerfile).toContain('mkdir -p "$COREPACK_HOME" /data/knight-backups');
+    expect(dockerfile).toContain('/app /data/knight-backups');
+    expect(dockerfile.indexOf('/data/knight-backups')).toBeLessThan(userNode);
+  });
 });
