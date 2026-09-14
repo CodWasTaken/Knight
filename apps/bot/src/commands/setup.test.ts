@@ -39,7 +39,7 @@ describe('executeSetupCommand', () => {
     expect(migrations.previewBanGuard).not.toHaveBeenCalled();
   });
 
-  it('includes the live MEMBER_BAN preview in Test mode', async () => {
+  it('includes the live Guarded Moderation preview in Test mode', async () => {
     const setup = { getState: vi.fn().mockResolvedValue(state(GuildMode.Test)) };
     const migrations = {
       previewBanGuard: vi
@@ -52,7 +52,8 @@ describe('executeSetupCommand', () => {
     );
 
     expect(migrations.previewBanGuard).toHaveBeenCalledWith('100');
-    expect(result.content).toContain('MEMBER_BAN');
+    expect(result.content).toContain('Guarded Moderation');
+    expect(result.content).not.toContain('MEMBER_BAN');
     expect(result.content).toContain('2 role');
     expect(result.content).toContain('4 active staff');
     expect(result.content).toContain('Owner confirmation');

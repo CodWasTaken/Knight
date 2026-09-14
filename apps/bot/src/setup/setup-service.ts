@@ -284,6 +284,15 @@ export class SetupService {
         'That Knight mode transition is not allowed.',
       );
     }
+    if (guild.mode === GuildMode.Observe && input.targetMode === GuildMode.Test) {
+      const setup = await this.dependencies.guilds.getSetupState(input.guildId);
+      if (setup?.step !== 'COMPLETE') {
+        throw new SetupError(
+          'SETUP_COMPLETE_REQUIRED',
+          'Complete every setup step before entering Test mode.',
+        );
+      }
+    }
     await this.dependencies.guilds.setMode(input.guildId, input.targetMode);
   }
 }

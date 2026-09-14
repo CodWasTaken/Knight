@@ -18,6 +18,8 @@ function makeDependencies(): GuardedMigrationDependencies {
       get: vi.fn().mockResolvedValue({ id: '100', ownerId: 'owner', mode: GuildMode.Test }),
       saveRolePermissionSnapshot: vi.fn().mockResolvedValue(undefined),
       getLatestRolePermissionSnapshots: vi.fn().mockResolvedValue([]),
+      getGuardedCategory: vi.fn().mockResolvedValue(null),
+      getSetupState: vi.fn().mockResolvedValue({ guildId: '100', step: 'COMPLETE', completedSteps: [], updatedAt: new Date() }),
       setGuardedBanState: vi.fn().mockResolvedValue(undefined),
     },
     staff: {
@@ -138,17 +140,21 @@ describe('GuardedMigrationService', () => {
     });
   });
 
-  it('refuses Guarded enable when no Staff Profile currently needs Ban Members migration', async () => {
+  it('activates Guarded as a durable no-op when no mapped role needs native permission removal', async () => {
     const deps = makeDependencies();
     deps.staff.listProfiles = vi.fn().mockResolvedValue([]);
 
-    await expect(
-      new GuardedMigrationService(deps).enableBanGuard({ guildId: '100', actorUserId: 'owner' }),
-    ).rejects.toMatchObject({ code: 'NO_AFFECTED_ROLES' });
+    await new GuardedMigrationService(deps).enableBanGuard({ guildId: '100', actorUserId: 'owner' });
 
     expect(deps.guilds.saveRolePermissionSnapshot).not.toHaveBeenCalled();
     expect(deps.discord.setRolePermissions).not.toHaveBeenCalled();
-    expect(deps.guilds.setGuardedBanState).not.toHaveBeenCalled();
+    expect(deps.guilds.setGuardedBanState).toHaveBeenCalledWith(
+      '100', true, GuildMode.Guarded, 'owner', { migrationId: null, snapshotRequired: false },
+    );
+    expect(deps.securityRecorder.record).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'guarded.enable', metadata: expect.objectContaining({ snapshotRequired: false, roleCount: 0 }) }),
+      'SECURITY',
+    );
   });
 
   it('requires the guild owner to enable Guarded mode', async () => {
@@ -226,6 +232,7 @@ describe('GuardedMigrationService', () => {
       true,
       GuildMode.Guarded,
       'owner',
+      { migrationId: '11111111-1111-4111-8111-111111111111', snapshotRequired: true },
     );
     expect(deps.securityRecorder.record).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -321,11 +328,45 @@ describe('GuardedMigrationService', () => {
       false,
       GuildMode.Test,
       'owner',
+      { migrationId: null, snapshotRequired: false },
     );
     expect(deps.securityRecorder.record).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'guarded.rollback', actorUserId: 'owner' }),
       'SECURITY',
     );
+  });
+
+  it('rolls back a no-op Guarded activation without snapshots or Discord writes', async () => {
+    const deps = makeDependencies();
+    deps.guilds.get = vi.fn().mockResolvedValue({ id: '100', ownerId: 'owner', mode: GuildMode.Guarded });
+    deps.guilds.getGuardedCategory = vi.fn().mockResolvedValue({
+      guildId: '100', category: 'MEMBER_BAN', enabled: true,
+      migrationId: null, snapshotRequired: false,
+    });
+    await new GuardedMigrationService(deps).rollbackBanGuard({ guildId: '100', actorUserId: 'owner' });
+    expect(deps.discord.setRolePermissions).not.toHaveBeenCalled();
+    expect(deps.guilds.setGuardedBanState).toHaveBeenCalledWith(
+      '100', false, GuildMode.Test, 'owner', { migrationId: null, snapshotRequired: false },
+    );
+  });
+
+  it('still refuses rollback when a real migration has lost its snapshots', async () => {
+    const deps = makeDependencies();
+    deps.guilds.get = vi.fn().mockResolvedValue({ id: '100', ownerId: 'owner', mode: GuildMode.Guarded });
+    deps.guilds.getGuardedCategory = vi.fn().mockResolvedValue({
+      guildId: '100', category: 'MEMBER_BAN', enabled: true,
+      migrationId: 'migration-1', snapshotRequired: true,
+    });
+    await expect(new GuardedMigrationService(deps).rollbackBanGuard({ guildId: '100', actorUserId: 'owner' }))
+      .rejects.toMatchObject({ code: 'ROLLBACK_SNAPSHOT_MISSING' });
+  });
+
+  it('rechecks setup completion before Guarded activation', async () => {
+    const deps = makeDependencies();
+    deps.guilds.getSetupState = vi.fn().mockResolvedValue({ guildId: '100', step: 'BACKUPS', completedSteps: [], updatedAt: new Date() });
+    await expect(new GuardedMigrationService(deps).enableBanGuard({ guildId: '100', actorUserId: 'owner' }))
+      .rejects.toMatchObject({ code: 'SETUP_COMPLETE_REQUIRED' });
+    expect(deps.discord.setRolePermissions).not.toHaveBeenCalled();
   });
 
   it('does not allow non-owners to roll back Guarded permissions', async () => {

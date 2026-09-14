@@ -7,11 +7,14 @@ function fakeRepositories() {
   return {
     guilds: {
       get: vi.fn().mockResolvedValue({ id: '100', ownerId: 'owner', mode: GuildMode.Test }),
-      getSetupState: vi.fn(),
+      getSetupState: vi.fn().mockResolvedValue({ step: 'COMPLETE' }),
       updateSetupState: vi.fn(),
       setMode: vi.fn(),
       saveRolePermissionSnapshot: vi.fn(),
       getLatestRolePermissionSnapshots: vi.fn(),
+      getGuardedCategory: vi.fn().mockResolvedValue({
+        enabled: true, migrationId: 'migration-1', snapshotRequired: true,
+      }),
       setGuardedBanState: vi.fn(),
     },
     managers: {

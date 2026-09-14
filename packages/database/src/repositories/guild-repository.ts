@@ -98,14 +98,18 @@ export class GuildRepository {
     enabled: boolean,
     mode: GuildMode,
     updatedBy: string,
+    activation: { migrationId: string | null; snapshotRequired: boolean } = {
+      migrationId: null,
+      snapshotRequired: enabled,
+    },
   ): Promise<void> {
     await this.database.db.transaction(async (tx) => {
       await tx
         .insert(guardedCategories)
-        .values({ guildId, category: 'MEMBER_BAN', enabled, updatedBy })
+        .values({ guildId, category: 'MEMBER_BAN', enabled, updatedBy, ...activation })
         .onConflictDoUpdate({
           target: [guardedCategories.guildId, guardedCategories.category],
-          set: { enabled, updatedBy, updatedAt: new Date() },
+          set: { enabled, updatedBy, ...activation, updatedAt: new Date() },
         });
       await tx.update(guilds).set({ mode, updatedAt: new Date() }).where(eq(guilds.id, guildId));
     });

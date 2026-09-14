@@ -32,6 +32,12 @@ export type RolePermissionSnapshot = Readonly<{
 export interface GuardedMigrationDependencies {
   guilds: {
     get(guildId: string): Promise<{ id: string; ownerId: string; mode: GuildMode } | null>;
+    getSetupState(guildId: string): Promise<{ step: string } | null>;
+    getGuardedCategory(guildId: string, category: string): Promise<{
+      enabled: boolean;
+      migrationId: string | null;
+      snapshotRequired: boolean;
+    } | null>;
     saveRolePermissionSnapshot(input: {
       guildId: string;
       migrationId: string;
@@ -44,6 +50,7 @@ export interface GuardedMigrationDependencies {
       enabled: boolean,
       mode: GuildMode,
       updatedBy: string,
+      activation: { migrationId: string | null; snapshotRequired: boolean },
     ): Promise<void>;
   };
   staff: {
@@ -220,14 +227,15 @@ export class GuardedMigrationService {
         'Knight must be in Test mode before Guarded permissions can be enabled.',
       );
     }
-
-    const preview = await this.previewBanGuard(input.guildId);
-    if (preview.roles.length === 0) {
+    const setup = await this.dependencies.guilds.getSetupState(input.guildId);
+    if (setup?.step !== 'COMPLETE') {
       throw new GuardedMigrationError(
-        'NO_AFFECTED_ROLES',
-        'No enabled Staff Profile currently has guarded native moderation permissions to replace.',
+        'SETUP_COMPLETE_REQUIRED',
+        'Complete every setup step before enabling Guarded Moderation.',
       );
     }
+
+    const preview = await this.previewBanGuard(input.guildId);
     if (preview.blocked) {
       throw new GuardedMigrationError(
         'MIGRATION_BLOCKED',
@@ -235,11 +243,11 @@ export class GuardedMigrationService {
       );
     }
 
-    const migrationId = this.dependencies.createMigrationId();
+    const migrationId = preview.roles.length > 0 ? this.dependencies.createMigrationId() : null;
     for (const role of preview.roles) {
       await this.dependencies.guilds.saveRolePermissionSnapshot({
         guildId: input.guildId,
-        migrationId,
+        migrationId: migrationId!,
         roleId: role.roleId,
         permissions: role.beforePermissions.toString(),
       });
@@ -281,6 +289,7 @@ export class GuardedMigrationService {
       true,
       GuildMode.Guarded,
       input.actorUserId,
+      { migrationId, snapshotRequired: preview.roles.length > 0 },
     );
     try {
       await this.dependencies.securityRecorder.record(
@@ -293,7 +302,12 @@ export class GuardedMigrationService {
           targetId: migrationId,
           decisionId: null,
           incidentId: null,
-          metadata: { migrationId, roleCount: preview.roles.length, staffCount: preview.staffCount },
+          metadata: {
+            migrationId,
+            snapshotRequired: preview.roles.length > 0,
+            roleCount: preview.roles.length,
+            staffCount: preview.staffCount,
+          },
         },
         'SECURITY',
       );
@@ -312,17 +326,20 @@ export class GuardedMigrationService {
         'Knight must be in Guarded mode to roll back Guarded permissions.',
       );
     }
-    const snapshots = await this.dependencies.guilds.getLatestRolePermissionSnapshots(
-      input.guildId,
-    );
-    if (snapshots.length === 0) {
+    const category = await this.dependencies.guilds.getGuardedCategory(input.guildId, 'MEMBER_BAN');
+    const snapshots = await this.dependencies.guilds.getLatestRolePermissionSnapshots(input.guildId);
+    const snapshotsRequired = category?.snapshotRequired !== false;
+    const snapshotsMatch = category?.migrationId === null || category?.migrationId === undefined
+      ? snapshots.length > 0
+      : snapshots.length > 0 && snapshots.every((snapshot) => snapshot.migrationId === category.migrationId);
+    if (snapshotsRequired && !snapshotsMatch) {
       throw new GuardedMigrationError(
         'ROLLBACK_SNAPSHOT_MISSING',
         'Knight has no saved role-permission snapshot for the active Guarded migration.',
       );
     }
 
-    for (const snapshot of snapshots) {
+    for (const snapshot of snapshotsRequired ? snapshots : []) {
       await this.dependencies.discord.setRolePermissions({
         guildId: input.guildId,
         roleId: snapshot.roleId,
@@ -336,6 +353,7 @@ export class GuardedMigrationService {
       false,
       GuildMode.Test,
       input.actorUserId,
+      { migrationId: null, snapshotRequired: false },
     );
     try {
       await this.dependencies.securityRecorder.record(

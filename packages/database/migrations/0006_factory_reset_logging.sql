@@ -13,6 +13,7 @@ CREATE TABLE "guild_factory_reset_jobs" (
 --> statement-breakpoint
 ALTER TABLE "guarded_categories" ADD COLUMN "migration_id" uuid;--> statement-breakpoint
 ALTER TABLE "guarded_categories" ADD COLUMN "snapshot_required" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+UPDATE "guarded_categories" SET "snapshot_required" = true WHERE "enabled" = true;--> statement-breakpoint
 ALTER TABLE "guild_logging_settings" ADD COLUMN "message_channel_id" text;--> statement-breakpoint
 ALTER TABLE "guild_logging_settings" ADD COLUMN "voice_channel_id" text;--> statement-breakpoint
 ALTER TABLE "guild_logging_settings" ADD COLUMN "store_deleted_message_content" boolean DEFAULT false NOT NULL;--> statement-breakpoint

@@ -190,10 +190,10 @@ export default async function SetupPage({
         <section className="panel setupPanel">
           <div className="cardHeading">
             <div>
-              <p className="eyebrow">MEMBER_BAN Guarded preview</p>
+              <p className="eyebrow">Guarded Moderation preview</p>
               <h2>
                 {preview.roles.length === 0
-                  ? 'Nothing to migrate'
+                  ? 'No native permissions need removal'
                   : preview.blocked
                     ? 'Migration blocked'
                     : 'Ready for owner confirmation'}
@@ -202,10 +202,14 @@ export default async function SetupPage({
             <span className="mode">{preview.staffCount} staff</span>
           </div>
           <p className="muted">
-            Only Discord Ban Members is removed. Every unrelated role permission is preserved.
+            Knight removes only Ban Members, Kick Members, Moderate Members, and Manage Messages.
+            Every unrelated role permission is preserved.
           </p>
           {preview.roles.length === 0 ? (
-            <p className="muted">No enabled Staff Profile currently grants `member.ban`.</p>
+            <p className="muted">
+              No native moderation permissions need removal. Activation is a safe no-op for Discord
+              roles, but Knight will still enter Guarded mode after owner confirmation.
+            </p>
           ) : (
             <div className="previewTable" role="table" aria-label="Guarded role permission preview">
               {preview.roles.map((role) => (
@@ -240,7 +244,7 @@ export default async function SetupPage({
                   Messages permissions.
                 </span>
               </label>
-              <button disabled={preview.blocked || preview.roles.length === 0} type="submit">
+              <button disabled={preview.blocked} type="submit">
                 Enable Guarded moderation
               </button>
             </form>
@@ -253,7 +257,7 @@ export default async function SetupPage({
       {state.mode === GuildMode.Guarded ? (
         <section className="panel setupPanel">
           <p className="eyebrow">Rollback</p>
-          <h2>MEMBER_BAN Guarded is active</h2>
+          <h2>Guarded Moderation is active</h2>
           <p className="lede">
             Knight will restore the exact latest saved role permission bigints before returning the
             guild to Test mode.

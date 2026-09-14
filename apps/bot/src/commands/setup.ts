@@ -40,13 +40,13 @@ export async function executeSetupCommand(
   if (state.mode === GuildMode.Test) {
     const preview = await dependencies.migrations.previewBanGuard(input.guildId);
     lines.push(
-      `MEMBER_BAN Guarded preview: ${preview.roles.length} role(s), ${preview.staffCount} active staff, ${preview.blocked ? 'blocked' : 'ready'}.`,
+      `Guarded Moderation preview: ${preview.roles.length} role(s), ${preview.staffCount} active staff, ${preview.blocked ? 'blocked' : 'ready'}.`,
       'Owner confirmation is required in the dashboard before enabling Guarded permissions.',
     );
   }
   if (state.mode === GuildMode.Guarded) {
     lines.push(
-      'MEMBER_BAN Guarded is active. Owner rollback to Test is available in the dashboard.',
+      'Guarded Moderation is active. Owner rollback to Test is available in the dashboard.',
     );
   }
 

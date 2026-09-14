@@ -27,6 +27,27 @@ vi.mock('next/navigation', () => ({ redirect: vi.fn() }));
 import SetupPage from './page';
 
 describe('setup page', () => {
+  it('presents no-op Guarded Moderation as activatable without raw implementation labels', async () => {
+    mocks.auth.mockResolvedValue({ user: { id: 'owner' } });
+    const runtime = { repositories: {} };
+    mocks.getWebRuntime.mockReturnValue(runtime);
+    mocks.requireGuildAccess.mockResolvedValue('OWNER');
+    mocks.getWebSetupServices.mockReturnValue({
+      setup: { getState: vi.fn().mockResolvedValue({
+        mode: 'TEST', step: 'COMPLETE', completedSteps: ['COMPLETE'], profileCount: 1,
+        profileReady: true, securityManagerCount: 0, securityManagerIds: [],
+        manageRolesReady: true, hierarchyHealthy: true, blockingRoleIds: [],
+        currentStepReady: true, currentStepBlockers: [], protectedResourceCount: 0,
+        nextAction: 'Review Knight protection status.',
+      }) },
+      migrations: { previewBanGuard: vi.fn().mockResolvedValue({ blocked: false, staffCount: 0, roles: [] }) },
+    });
+    const html = renderToStaticMarkup(await SetupPage({ params: Promise.resolve({ guildId: '100' }) }));
+    expect(html).toContain('Guarded Moderation');
+    expect(html).toContain('No native moderation permissions need removal');
+    expect(html).not.toContain('MEMBER_BAN Guarded');
+    expect(html).not.toMatch(/<button[^>]*disabled[^>]*>Enable Guarded moderation/);
+  });
   it('links the LOGGING step to an explicit notification choice', async () => {
     mocks.auth.mockResolvedValue({ user: { id: 'owner' } });
     const runtime = { repositories: {} };

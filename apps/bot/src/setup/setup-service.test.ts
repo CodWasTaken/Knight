@@ -178,6 +178,7 @@ describe('SetupService', () => {
 
   it('allows a Security Manager to move Observe to Test and Test back to Observe', async () => {
     const deps = makeDependencies();
+    setStep(deps, 'COMPLETE');
     deps.managers.isSecurityManager = vi.fn().mockResolvedValue(true);
     const service = new SetupService(deps);
 
@@ -197,6 +198,13 @@ describe('SetupService', () => {
       targetMode: GuildMode.Observe,
     });
     expect(deps.guilds.setMode).toHaveBeenCalledWith('100', GuildMode.Observe);
+  });
+  it('refuses Observe to Test until setup is complete', async () => {
+    const deps = makeDependencies();
+    await expect(new SetupService(deps).transitionMode({
+      guildId: '100', actorUserId: 'owner', targetMode: GuildMode.Test,
+    })).rejects.toMatchObject({ code: 'SETUP_COMPLETE_REQUIRED' });
+    expect(deps.guilds.setMode).not.toHaveBeenCalled();
   });
   it('rejects direct Guarded transitions because migration evidence is required', async () => {
     const deps = makeDependencies();
