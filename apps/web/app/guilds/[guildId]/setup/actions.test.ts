@@ -26,6 +26,7 @@ import {
   enableGuardedBanAction,
   enterTestModeAction,
   rollbackGuardedBanAction,
+  factoryResetAction,
 } from './actions';
 
 function formData(): FormData {
@@ -112,8 +113,9 @@ describe('setup actions', () => {
     mocks.requireGuildAccess.mockResolvedValue('OWNER');
     mocks.getWebSetupServices.mockReturnValue({ setup: {}, migrations });
 
-    await expect(enableGuardedBanAction(formData())).rejects.toThrow('explicit owner confirmation');
+    await enableGuardedBanAction(formData());
     expect(migrations.enableBanGuard).not.toHaveBeenCalled();
+    expect(mocks.redirect).toHaveBeenCalledWith('/guilds/100/setup?notice=invalid-confirmation');
   });
 
   it('fails safely when live Discord setup credentials are not configured', async () => {
@@ -123,9 +125,56 @@ describe('setup actions', () => {
     mocks.requireGuildAccess.mockResolvedValue('OWNER');
     mocks.getWebSetupServices.mockReturnValue(null);
 
-    await expect(enableGuardedBanAction(formData())).rejects.toThrow(
+    await expect(enableGuardedBanAction(confirmedFormData())).rejects.toThrow(
       'Live Discord setup operations are unavailable',
     );
     expect(mocks.revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it('requires the exact reset phrase and separate acknowledgement', async () => {
+    const requestReset = vi.fn();
+    mocks.auth.mockResolvedValue({ user: { id: 'session-owner' } });
+    mocks.getWebRuntime.mockReturnValue({ repositories: {} });
+    mocks.requireGuildAccess.mockResolvedValue('OWNER');
+    const invalid = formData();
+    invalid.set('resetPhrase', 'reset knight');
+    invalid.set('acknowledgeReset', 'yes');
+    await factoryResetAction(invalid, { createService: () => ({ requestReset }) } as never);
+    expect(requestReset).not.toHaveBeenCalled();
+    expect(mocks.redirect).toHaveBeenCalledWith('/guilds/100/setup?notice=invalid-confirmation');
+
+    mocks.redirect.mockClear();
+    const missingAcknowledgement = formData();
+    missingAcknowledgement.set('resetPhrase', 'RESET KNIGHT');
+    await factoryResetAction(missingAcknowledgement, { createService: () => ({ requestReset }) } as never);
+    expect(requestReset).not.toHaveBeenCalled();
+    expect(mocks.redirect).toHaveBeenCalledWith('/guilds/100/setup?notice=invalid-confirmation');
+  });
+
+  it('queues a confirmed factory reset and returns a safe notice code', async () => {
+    const requestReset = vi.fn().mockResolvedValue({ id: 'reset-1' });
+    mocks.auth.mockResolvedValue({ user: { id: 'session-owner' } });
+    mocks.getWebRuntime.mockReturnValue({ repositories: {} });
+    mocks.requireGuildAccess.mockResolvedValue('OWNER');
+    const confirmed = formData();
+    confirmed.set('resetPhrase', 'RESET KNIGHT');
+    confirmed.set('acknowledgeReset', 'yes');
+    await factoryResetAction(confirmed, { createService: () => ({ requestReset }) } as never);
+    expect(requestReset).toHaveBeenCalledWith({ guildId: '100', actorUserId: 'session-owner' });
+    expect(mocks.redirect).toHaveBeenCalledWith('/guilds/100/setup?notice=reset-queued');
+  });
+
+  it('does not catch the framework redirect raised after a successful reset queue', async () => {
+    const redirectSignal = new Error('NEXT_REDIRECT');
+    mocks.redirect.mockImplementation(() => { throw redirectSignal; });
+    mocks.auth.mockResolvedValue({ user: { id: 'session-owner' } });
+    mocks.getWebRuntime.mockReturnValue({ repositories: {} });
+    mocks.requireGuildAccess.mockResolvedValue('OWNER');
+    const confirmed = formData();
+    confirmed.set('resetPhrase', 'RESET KNIGHT');
+    confirmed.set('acknowledgeReset', 'yes');
+    await expect(factoryResetAction(confirmed, { createService: () => ({ requestReset: vi.fn().mockResolvedValue({ id: 'reset-1' }) }) } as never)).rejects.toBe(redirectSignal);
+    expect(mocks.redirect).toHaveBeenCalledTimes(1);
+    expect(mocks.redirect).toHaveBeenCalledWith('/guilds/100/setup?notice=reset-queued');
   });
 });

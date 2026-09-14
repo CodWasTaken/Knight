@@ -1,5 +1,6 @@
 import {
   BackupRepository,
+  FactoryResetRepository,
   GuildRepository,
   SecurityLedgerRepository,
   SecurityManagerRepository,
@@ -20,5 +21,6 @@ describe('createWebRepositories', () => {
     expect(repositories.security).toBeInstanceOf(SecurityRepository);
     expect(repositories.staff).toBeInstanceOf(StaffRepository);
     expect(repositories.backups).toBeInstanceOf(BackupRepository);
+    expect(repositories.factoryResets).toBeInstanceOf(FactoryResetRepository);
   });
 });

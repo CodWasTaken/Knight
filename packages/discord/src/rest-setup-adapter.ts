@@ -17,7 +17,7 @@ export interface DiscordRestClient {
   delete?(route: DiscordRoute, options?: { reason?: string }): Promise<unknown>;
 }
 
-type GuildPayload = Readonly<{ id: string; owner_id: string }>;
+type GuildPayload = Readonly<{ id: string; owner_id: string; name?: string }>;
 type UserPayload = Readonly<{ id: string }>;
 type MemberPayload = Readonly<{ roles: readonly string[] }>;
 type RolePayload = Readonly<{
@@ -61,6 +61,11 @@ function asChannel(value: unknown): ChannelPayload {
 }
 export class DiscordRestSetupAdapter {
   public constructor(private readonly rest: DiscordRestClient) {}
+
+  public async getGuildIdentity(guildId: string): Promise<{ guildId: string; name: string }> {
+    const guild = asGuild(await this.rest.get(Routes.guild(guildId)));
+    return { guildId: guild.id, name: guild.name ?? guild.id };
+  }
 
   public async getGuildState(guildId: string): Promise<DiscordGuildState> {
     const user = asUser(await this.rest.get(Routes.user()));

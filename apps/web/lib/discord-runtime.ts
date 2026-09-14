@@ -18,6 +18,7 @@ export type WebDiscordAdapter = Pick<
 
 export type WebDiscordAdapterWithProtection = WebDiscordAdapter &
   Readonly<{
+    getGuildIdentity(guildId: string): Promise<{ guildId: string; name: string }>;
     getGuildChannelState(
       guildId: string,
       channelId: string,

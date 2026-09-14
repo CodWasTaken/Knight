@@ -8,6 +8,12 @@ const ALL_KNOWN_PERMISSIONS = Object.values(PermissionFlagsBits).reduce(
 import { DiscordRestSetupAdapter } from './rest-setup-adapter.js';
 
 describe('DiscordRestSetupAdapter', () => {
+  it('loads a focused guild identity for dashboard headings', async () => {
+    const adapter = new DiscordRestSetupAdapter({
+      get: vi.fn().mockResolvedValue({ id: '100', owner_id: 'owner', name: 'Knight Ops' }), patch: vi.fn(),
+    });
+    await expect(adapter.getGuildIdentity('100')).resolves.toEqual({ guildId: '100', name: 'Knight Ops' });
+  });
   it('reads live guild role state and expands Administrator into effective permissions', async () => {
     const get = vi.fn().mockImplementation(async (route: string) => {
       if (route === Routes.user()) return { id: 'knight' };
