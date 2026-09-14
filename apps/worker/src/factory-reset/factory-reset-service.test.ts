@@ -23,7 +23,7 @@ describe('FactoryResetService', () => {
     expect(made.locks.acquire).toHaveBeenCalledWith('guild-operation:100', expect.any(Number));
     expect(made.resets.getExecutionEligibility.mock.invocationCallOrder[0]).toBeLessThan(made.storage.deleteGuild.mock.invocationCallOrder[0]!);
     expect(made.storage.deleteGuild.mock.invocationCallOrder[0]).toBeLessThan(made.resets.resetGuildKnightState.mock.invocationCallOrder[0]!);
-    expect(made.resets.resetGuildKnightState).toHaveBeenCalledWith({ guildId: '100', resetJobId: 'reset-1', ownerId: 'owner-1' });
+    expect(made.resets.resetGuildKnightState).toHaveBeenCalledWith({ guildId: '100', resetJobId: 'reset-1' });
     expect(made.resets.complete).toHaveBeenCalledWith({ guildId: '100', resetJobId: 'reset-1' });
     expect(made.locks.release).toHaveBeenCalledWith('guild-operation:100', 'token');
   });

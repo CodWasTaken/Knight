@@ -64,7 +64,7 @@ describe('factory reset persistence', () => {
     const job = await resets.enqueue({ guildId: 'g1', requestedBy: 'owner-1' });
     await resets.claimPending();
 
-    await resets.resetGuildKnightState({ guildId: 'g1', resetJobId: job.id, ownerId: 'owner-1' });
+    await resets.resetGuildKnightState({ guildId: 'g1', resetJobId: job.id });
     await resets.complete({ guildId: 'g1', resetJobId: job.id });
 
     expect(await guilds.get('g1')).toMatchObject({ ownerId: 'owner-1', mode: 'OBSERVE' });
@@ -79,8 +79,16 @@ describe('factory reset persistence', () => {
   it('is retry-safe for the same reset job', async () => {
     const job = await resets.enqueue({ guildId: 'g1', requestedBy: 'owner-1' });
     await resets.claimPending();
-    await resets.resetGuildKnightState({ guildId: 'g1', resetJobId: job.id, ownerId: 'owner-1' });
-    await resets.resetGuildKnightState({ guildId: 'g1', resetJobId: job.id, ownerId: 'owner-1' });
+    await resets.resetGuildKnightState({ guildId: 'g1', resetJobId: job.id });
+    await resets.resetGuildKnightState({ guildId: 'g1', resetJobId: job.id });
     expect(await guilds.getSetupState('g1')).toMatchObject({ step: 'WELCOME', completedSteps: [] });
+  });
+
+  it('preserves the current stored Discord owner when ownership changes after enqueue', async () => {
+    const job = await resets.enqueue({ guildId: 'g1', requestedBy: 'owner-1' });
+    await resets.claimPending();
+    await guilds.createOrUpdateOwner('g1', 'owner-new');
+    await resets.resetGuildKnightState({ guildId: 'g1', resetJobId: job.id });
+    expect(await guilds.get('g1')).toMatchObject({ ownerId: 'owner-new' });
   });
 });

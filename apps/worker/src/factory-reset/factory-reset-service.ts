@@ -6,7 +6,7 @@ type FactoryResetDependencies = Readonly<{
   resets: {
     claimPending(): Promise<ResetJob | null>;
     getExecutionEligibility(guildId: string): Promise<{ eligible: boolean; blockers: readonly string[] }>;
-    resetGuildKnightState(input: { guildId: string; resetJobId: string; ownerId: string }): Promise<void>;
+    resetGuildKnightState(input: { guildId: string; resetJobId: string }): Promise<void>;
     complete(input: { guildId: string; resetJobId: string }): Promise<unknown>;
     fail(input: { guildId: string; resetJobId: string; error: string }): Promise<unknown>;
     recoverInterrupted(): Promise<void>;
@@ -45,7 +45,6 @@ export class FactoryResetService {
       await this.dependencies.resets.resetGuildKnightState({
         guildId: job.guildId,
         resetJobId: job.id,
-        ownerId: job.requestedBy,
       });
       await this.dependencies.resets.complete({ guildId: job.guildId, resetJobId: job.id });
     } catch (error) {

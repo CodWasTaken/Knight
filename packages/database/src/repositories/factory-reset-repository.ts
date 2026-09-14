@@ -102,7 +102,7 @@ export class FactoryResetRepository {
     return { eligible: blockers.length === 0, blockers };
   }
 
-  public async resetGuildKnightState(input: { guildId: string; resetJobId: string; ownerId: string }): Promise<void> {
+  public async resetGuildKnightState(input: { guildId: string; resetJobId: string }): Promise<void> {
     await this.database.db.transaction(async (tx) => {
       const [guild] = await tx.select({ id: guilds.id }).from(guilds).where(eq(guilds.id, input.guildId)).for('update').limit(1);
       if (!guild) throw new Error('Guild not found for factory reset execution');
@@ -130,7 +130,7 @@ export class FactoryResetRepository {
       await tx.delete(guardedCategories).where(eq(guardedCategories.guildId, input.guildId));
       await tx.delete(setupStates).where(eq(setupStates.guildId, input.guildId));
       await tx.delete(guildFactoryResetJobs).where(and(eq(guildFactoryResetJobs.guildId, input.guildId), ne(guildFactoryResetJobs.id, input.resetJobId)));
-      await tx.update(guilds).set({ ownerId: input.ownerId, mode: GuildMode.Observe, updatedAt: new Date() }).where(eq(guilds.id, input.guildId));
+      await tx.update(guilds).set({ mode: GuildMode.Observe, updatedAt: new Date() }).where(eq(guilds.id, input.guildId));
       await tx.insert(setupStates).values({ guildId: input.guildId, step: 'WELCOME', completedSteps: [] }).onConflictDoUpdate({ target: setupStates.guildId, set: { step: 'WELCOME', completedSteps: [], updatedAt: new Date() } });
     });
   }
