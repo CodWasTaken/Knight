@@ -10,7 +10,8 @@
     "./repositories/security-ledger-repository": "./src/repositories/security-ledger-repository.ts",
     "./repositories/security-manager-repository": "./src/repositories/security-manager-repository.ts",
     "./repositories/security-repository": "./src/repositories/security-repository.ts",
-    "./repositories/staff-repository": "./src/repositories/staff-repository.ts"
+    "./repositories/staff-repository": "./src/repositories/staff-repository.ts",
+    "./repositories/factory-reset-repository": "./src/repositories/factory-reset-repository.ts"
   },
   "scripts": {
     "lint": "eslint src",

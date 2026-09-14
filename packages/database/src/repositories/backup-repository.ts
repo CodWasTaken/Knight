@@ -1,7 +1,7 @@
 import type { BackupPolicyMode } from '@knight/contracts';
 import { and, asc, desc, eq, gte, inArray, notExists, or, sql } from 'drizzle-orm';
 import type { Database } from '../client.js';
-import { backupPolicies, backups, recoveryJobs } from '../schema/index.js';
+import { backupPolicies, backups, guildFactoryResetJobs, guilds, recoveryJobs } from '../schema/index.js';
 
 export type BackupPolicyRecord = typeof backupPolicies.$inferSelect;
 export type BackupRecord = typeof backups.$inferSelect;
@@ -108,9 +108,12 @@ export class BackupRepository {
     guildId: string;
     requestedBy: string;
   }): Promise<BackupRecord> {
-    const [record] = await this.database.db.insert(backups).values(input).returning();
-    if (!record) throw new Error('Failed to enqueue backup');
-    return record;
+    return this.database.db.transaction(async (tx) => {
+      await this.lockGuildAndRejectReset(tx, input.guildId);
+      const [record] = await tx.insert(backups).values(input).returning();
+      if (!record) throw new Error('Failed to enqueue backup');
+      return record;
+    });
   }
 
   public async claimPendingBackup(): Promise<BackupRecord | null> {
@@ -209,11 +212,14 @@ export class BackupRepository {
     backupId: string;
     requestedBy: string;
   }): Promise<RecoveryJobRecord> {
-    const backup = await this.getBackup(input.guildId, input.backupId);
-    if (!backup) throw new Error('Backup not found in guild');
-    const [record] = await this.database.db.insert(recoveryJobs).values(input).returning();
-    if (!record) throw new Error('Failed to enqueue restore preview');
-    return record;
+    return this.database.db.transaction(async (tx) => {
+      await this.lockGuildAndRejectReset(tx, input.guildId);
+      const [backup] = await tx.select({ id: backups.id }).from(backups).where(and(eq(backups.guildId, input.guildId), eq(backups.id, input.backupId))).limit(1);
+      if (!backup) throw new Error('Backup not found in guild');
+      const [record] = await tx.insert(recoveryJobs).values(input).returning();
+      if (!record) throw new Error('Failed to enqueue restore preview');
+      return record;
+    });
   }
 
   public async saveRestorePreview(input: {
@@ -242,8 +248,10 @@ export class BackupRepository {
     jobId: string;
     confirmedBy: string;
   }): Promise<RecoveryJobRecord> {
+    return this.database.db.transaction(async (tx) => {
+    await this.lockGuildAndRejectReset(tx, input.guildId);
     const now = new Date();
-    const [record] = await this.database.db
+    const [record] = await tx
       .update(recoveryJobs)
       .set({
         phase: 'EXECUTION',
@@ -266,6 +274,7 @@ export class BackupRepository {
       .returning();
     if (!record) throw new Error('Restore preview is not ready for confirmation');
     return record;
+    });
   }
 
   public async claimPendingRestore(): Promise<RecoveryJobRecord | null> {
@@ -348,8 +357,10 @@ export class BackupRepository {
   }
 
   public async retryRestore(input: { guildId: string; jobId: string }): Promise<RecoveryJobRecord> {
+    return this.database.db.transaction(async (tx) => {
+    await this.lockGuildAndRejectReset(tx, input.guildId);
     const now = new Date();
-    const [record] = await this.database.db
+    const [record] = await tx
       .update(recoveryJobs)
       .set({ status: 'PENDING', error: null, startedAt: null, completedAt: null, updatedAt: now })
       .where(
@@ -363,6 +374,7 @@ export class BackupRepository {
       .returning();
     if (!record) throw new Error('Failed recovery execution is not retryable');
     return record;
+    });
   }
 
   public async completeRestore(input: { guildId: string; jobId: string }): Promise<RecoveryJobRecord> {
@@ -381,5 +393,17 @@ export class BackupRepository {
       .returning();
     if (!record) throw new Error('Recovery execution is not running');
     return record;
+  }
+
+  public async getActiveBackup(guildId: string): Promise<BackupRecord | null> {
+    const [record] = await this.database.db.select().from(backups).where(and(eq(backups.guildId, guildId), inArray(backups.status, ['PENDING', 'RUNNING']))).orderBy(desc(backups.updatedAt)).limit(1);
+    return record ?? null;
+  }
+
+  private async lockGuildAndRejectReset(tx: Parameters<Parameters<Database['db']['transaction']>[0]>[0], guildId: string): Promise<void> {
+    const [guild] = await tx.select({ id: guilds.id }).from(guilds).where(eq(guilds.id, guildId)).for('update').limit(1);
+    if (!guild) throw new Error('Guild not found');
+    const [reset] = await tx.select({ id: guildFactoryResetJobs.id }).from(guildFactoryResetJobs).where(and(eq(guildFactoryResetJobs.guildId, guildId), inArray(guildFactoryResetJobs.status, ['PENDING', 'RUNNING']))).limit(1);
+    if (reset) throw new Error('An active factory reset blocks backup and recovery work');
   }
 }

@@ -20,6 +20,8 @@ export const guardedCategories = pgTable(
       .references(() => guilds.id, { onDelete: 'cascade' }),
     category: text('category').notNull(),
     enabled: boolean('enabled').notNull().default(false),
+    migrationId: uuid('migration_id'),
+    snapshotRequired: boolean('snapshot_required').notNull().default(false),
     updatedBy: text('updated_by').notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

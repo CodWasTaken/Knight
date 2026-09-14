@@ -63,6 +63,9 @@ describe('security ledger persistence', () => {
       guildId: 'g1',
       securityChannelId: null,
       moderationChannelId: null,
+      messageChannelId: null,
+      voiceChannelId: null,
+      storeDeletedMessageContent: false,
       updatedBy: 'owner-1',
     });
 
@@ -70,6 +73,9 @@ describe('security ledger persistence', () => {
       guildId: 'g1',
       securityChannelId: null,
       moderationChannelId: null,
+      messageChannelId: null,
+      voiceChannelId: null,
+      storeDeletedMessageContent: false,
       updatedBy: 'owner-1',
     });
 
@@ -77,18 +83,25 @@ describe('security ledger persistence', () => {
       guildId: 'g1',
       securityChannelId: 'security-channel',
       moderationChannelId: 'moderation-channel',
+      messageChannelId: 'message-channel',
+      voiceChannelId: 'voice-channel',
+      storeDeletedMessageContent: true,
       updatedBy: 'owner-1',
     });
 
     expect(await ledger.getLoggingSettings('g1')).toMatchObject({
       securityChannelId: 'security-channel',
       moderationChannelId: 'moderation-channel',
+      messageChannelId: 'message-channel',
+      voiceChannelId: 'voice-channel',
+      storeDeletedMessageContent: true,
     });
   });
   it('remaps only matching logging channel references during recovery', async () => {
     await ledger.saveLoggingSettings({
       guildId: 'g1', securityChannelId: 'old-security',
-      moderationChannelId: 'keep-moderation', updatedBy: 'owner-1',
+      moderationChannelId: 'keep-moderation', messageChannelId: 'old-security',
+      voiceChannelId: 'keep-voice', storeDeletedMessageContent: true, updatedBy: 'owner-1',
     });
     await ledger.remapLoggingChannelForRecovery({
       guildId: 'g1', oldChannelId: 'old-security', newChannelId: 'new-security',
@@ -96,6 +109,8 @@ describe('security ledger persistence', () => {
     });
     expect(await ledger.getLoggingSettings('g1')).toMatchObject({
       securityChannelId: 'new-security', moderationChannelId: 'keep-moderation',
+      messageChannelId: 'new-security', voiceChannelId: 'keep-voice',
+      storeDeletedMessageContent: true,
       updatedBy: 'RECOVERY:job-1',
     });
   });

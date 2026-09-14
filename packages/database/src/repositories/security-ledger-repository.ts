@@ -138,7 +138,11 @@ export class SecurityLedgerRepository {
         settings.securityChannelId === input.oldChannelId ? input.newChannelId : settings.securityChannelId;
       const moderationChannelId =
         settings.moderationChannelId === input.oldChannelId ? input.newChannelId : settings.moderationChannelId;
-      if (securityChannelId === settings.securityChannelId && moderationChannelId === settings.moderationChannelId) {
+      const messageChannelId =
+        settings.messageChannelId === input.oldChannelId ? input.newChannelId : settings.messageChannelId;
+      const voiceChannelId =
+        settings.voiceChannelId === input.oldChannelId ? input.newChannelId : settings.voiceChannelId;
+      if (securityChannelId === settings.securityChannelId && moderationChannelId === settings.moderationChannelId && messageChannelId === settings.messageChannelId && voiceChannelId === settings.voiceChannelId) {
         return settings;
       }
 
@@ -147,6 +151,8 @@ export class SecurityLedgerRepository {
         .set({
           securityChannelId,
           moderationChannelId,
+          messageChannelId,
+          voiceChannelId,
           updatedBy: `RECOVERY:${input.recoveryJobId}`,
           updatedAt: new Date(),
         })
@@ -161,16 +167,28 @@ export class SecurityLedgerRepository {
     guildId: string;
     securityChannelId: string | null;
     moderationChannelId: string | null;
+    messageChannelId?: string | null;
+    voiceChannelId?: string | null;
+    storeDeletedMessageContent?: boolean;
     updatedBy: string;
   }): Promise<LoggingSettingsRecord> {
+    const values = {
+      ...input,
+      messageChannelId: input.messageChannelId ?? null,
+      voiceChannelId: input.voiceChannelId ?? null,
+      storeDeletedMessageContent: input.storeDeletedMessageContent ?? false,
+    };
     const [settings] = await this.database.db
       .insert(guildLoggingSettings)
-      .values(input)
+      .values(values)
       .onConflictDoUpdate({
         target: guildLoggingSettings.guildId,
         set: {
           securityChannelId: input.securityChannelId,
           moderationChannelId: input.moderationChannelId,
+          messageChannelId: values.messageChannelId,
+          voiceChannelId: values.voiceChannelId,
+          storeDeletedMessageContent: values.storeDeletedMessageContent,
           updatedBy: input.updatedBy,
           updatedAt: new Date(),
         },

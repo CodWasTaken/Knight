@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
   bigserial,
+  boolean,
   check,
   index,
   jsonb,
@@ -16,6 +17,9 @@ export const guildLoggingSettings = pgTable('guild_logging_settings', {
     .references(() => guilds.id, { onDelete: 'cascade' }),
   securityChannelId: text('security_channel_id'),
   moderationChannelId: text('moderation_channel_id'),
+  messageChannelId: text('message_channel_id'),
+  voiceChannelId: text('voice_channel_id'),
+  storeDeletedMessageContent: boolean('store_deleted_message_content').notNull().default(false),
   updatedBy: text('updated_by').notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
