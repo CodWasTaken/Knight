@@ -17,7 +17,7 @@ describe('security logs page', () => {
         createdAt: new Date('2026-09-12T10:30:00.000Z'),
         severity: 'HIGH',
         source: 'KNIGHT',
-        action: 'member.ban',
+        action: 'voice.move',
         actorUserId: 'actor-1',
         targetId: 'target-1',
         decisionId: 'decision-1',
@@ -32,7 +32,7 @@ describe('security logs page', () => {
         params: Promise.resolve({ guildId: '100' }),
         searchParams: Promise.resolve({
           source: ' KNIGHT ',
-          action: 'member.ban',
+          action: 'voice.move',
           severity: 'HIGH',
           actor: 'actor-1',
           target: 'target-1',
@@ -42,7 +42,7 @@ describe('security logs page', () => {
 
     expect(listRecent).toHaveBeenCalledWith('100', {
       source: 'KNIGHT',
-      action: 'member.ban',
+      action: 'voice.move',
       severity: 'HIGH',
       actorUserId: 'actor-1',
       targetId: 'target-1',
@@ -51,7 +51,7 @@ describe('security logs page', () => {
     for (const value of [
       'HIGH',
       'KNIGHT',
-      'member.ban',
+      'Voice channel move',
       'actor-1',
       'target-1',
       'decision-1',
@@ -59,7 +59,11 @@ describe('security logs page', () => {
     ]) {
       expect(html).toContain(value);
     }
-    expect(html).not.toContain('secretDetail');
+    expect(html).toContain('secretDetail');
+    expect(html).toContain('<details');
+    expect(html).toContain('Structured metadata');
+    expect(html).toContain('category-voice');
+    expect(html).toContain('severity-high');
   });
 
   it('ignores an unsupported severity filter and shows an empty state', async () => {

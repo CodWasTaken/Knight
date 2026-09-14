@@ -10,6 +10,13 @@ export default async function LoggingPage({
   const settings = await runtime.repositories.securityLedger.getLoggingSettings(guildId);
   const discord = getWebDiscordAdapter(runtime);
   const channels = discord === null ? [] : await discord.listTextChannels(guildId);
+  const messageContentAvailable = runtime.env.ENABLE_MESSAGE_CONTENT_ARCHIVE;
+  const categories = [
+    { field: 'securityChannelId', label: 'Security destination', value: settings?.securityChannelId ?? '', examples: 'Role and channel changes, bots, webhooks, firewall, Guarded, and emergency events.' },
+    { field: 'moderationChannelId', label: 'Moderation destination', value: settings?.moderationChannelId ?? '', examples: 'Warn, timeout, kick, ban, unban, purge, and attributable native moderation.' },
+    { field: 'messageChannelId', label: 'Messages destination', value: settings?.messageChannelId ?? '', examples: 'Single message deletes and bulk-delete summaries.' },
+    { field: 'voiceChannelId', label: 'Voice destination', value: settings?.voiceChannelId ?? '', examples: 'Join, leave, move, server mute, and server deafen changes.' },
+  ] as const;
 
   return (
     <main className="shell">
@@ -32,39 +39,29 @@ export default async function LoggingPage({
         {discord === null ? (
           <p className="notice">
             Live Discord validation is unavailable because DISCORD_TOKEN is not configured for the
-            web service. You can still save both destinations as Disabled.
+            web service. You can still save all destinations as Disabled.
           </p>
         ) : null}
         <form action={saveLoggingSettingsAction} className="metadataForm loggingForm">
           <input name="guildId" type="hidden" value={guildId} />
-          <label>
-            <span>Security destination</span>
-            <select
-              defaultValue={discord === null ? '' : (settings?.securityChannelId ?? '')}
-              name="securityChannelId"
-            >
-              <option value="">Disabled</option>
-              {channels.map((channel) => (
-                <option key={channel.channelId} value={channel.channelId}>
-                  #{channel.name}
-                </option>
-              ))}
-            </select>
+          {categories.map((category) => (
+            <label className="loggingCategory" key={category.field}>
+              <span>{category.label}</span>
+              <small className="muted">{category.examples}</small>
+              <select defaultValue={discord === null ? '' : category.value} name={category.field}>
+                <option value="">Disabled</option>
+                {channels.map((channel) => <option key={channel.channelId} value={channel.channelId}>#{channel.name}</option>)}
+              </select>
+            </label>
+          ))}
+          <label className="toggleRow">
+            <input defaultChecked={settings?.storeDeletedMessageContent ?? false} name="storeDeletedMessageContent" type="checkbox" value="yes" />
+            <span>Retain deleted message text when Discord supplies it</span>
           </label>
-          <label>
-            <span>Moderation destination</span>
-            <select
-              defaultValue={discord === null ? '' : (settings?.moderationChannelId ?? '')}
-              name="moderationChannelId"
-            >
-              <option value="">Disabled</option>
-              {channels.map((channel) => (
-                <option key={channel.channelId} value={channel.channelId}>
-                  #{channel.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className={messageContentAvailable ? 'notice noticeSuccess' : 'notice'}>
+            <strong>{messageContentAvailable ? 'Message Content available' : 'Message Content intent is not enabled'}</strong>
+            <p>{messageContentAvailable ? 'Deleted text can be retained when the guild option is enabled.' : 'Saving retention is allowed, but logging remains metadata-only until runtime capability and the privileged Discord intent are enabled.'}</p>
+          </div>
           <button type="submit">Save logging settings</button>
         </form>
       </section>

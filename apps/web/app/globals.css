@@ -432,6 +432,35 @@ button:disabled {
   outline: 3px solid #c9cdfb;
   outline-offset: 2px;
 }
+.loggingCategory {
+  display: grid;
+  gap: 0.35rem;
+  align-content: start;
+  padding: 0.9rem;
+  border: 1px solid #3f4147;
+  border-radius: 6px;
+}
+.badge {
+  display: inline-block;
+  padding: 0.15rem 0.45rem;
+  border: 1px solid #4e5058;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+.category-security,
+.severity-high,
+.severity-critical { color: #f0b4b4; }
+.category-moderation { color: #f1c887; }
+.category-messages { color: #9ed6b2; }
+.category-voice { color: #b8b9ff; }
+.ledgerTable details pre {
+  max-width: 32rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .guildShell {
   min-height: 100vh;
   display: grid;

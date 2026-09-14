@@ -7,6 +7,18 @@ import { getWebRuntime } from '../../../../lib/server-runtime';
 type SearchParams = Record<string, string | string[] | undefined>;
 
 const SEVERITIES: readonly SecurityLedgerSeverity[] = ['INFO', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
+const ACTION_LABELS: Readonly<Record<string, string>> = {
+  'member.warn': 'Member warned', 'member.ban': 'Member banned',
+  'message.delete': 'Message deleted', 'message.bulk_delete': 'Messages bulk deleted',
+  'voice.move': 'Voice channel move', 'guarded.enable': 'Guarded Moderation enabled',
+};
+
+function category(action: string): string {
+  if (action.startsWith('message.')) return 'messages';
+  if (action.startsWith('voice.')) return 'voice';
+  if (action.startsWith('member.')) return 'moderation';
+  return 'security';
+}
 
 function queryValue(searchParams: SearchParams, name: string): string | undefined {
   const value = searchParams[name];
@@ -104,8 +116,7 @@ export default async function LogsPage({
                   <th>Action</th>
                   <th>Actor</th>
                   <th>Target</th>
-                  <th>Decision</th>
-                  <th>Incident</th>
+                  <th>Details</th>
                 </tr>
               </thead>
               <tbody>
@@ -116,13 +127,18 @@ export default async function LogsPage({
                         {entry.createdAt.toISOString()}
                       </time>
                     </td>
-                    <td>{entry.severity}</td>
-                    <td>{entry.source}</td>
-                    <td>{entry.action}</td>
-                    <td>{entry.actorUserId ?? '—'}</td>
-                    <td>{entry.targetId ?? '—'}</td>
-                    <td>{entry.decisionId ?? '—'}</td>
-                    <td>{entry.incidentId ?? '—'}</td>
+                    <td><span className={`badge severity-${entry.severity.toLowerCase()}`}>{entry.severity}</span></td>
+                    <td><span className={`badge category-${category(entry.action)}`}>{category(entry.action)}</span> {entry.source}</td>
+                    <td><strong>{ACTION_LABELS[entry.action] ?? entry.action}</strong><br /><code>{entry.action}</code></td>
+                    <td>{entry.actorUserId ? `User ${entry.actorUserId}` : 'Unknown actor'}</td>
+                    <td>{entry.targetId ? `Target ${entry.targetId}` : 'No target'}</td>
+                    <td>
+                      <details>
+                        <summary>Structured metadata</summary>
+                        <dl><dt>Decision</dt><dd>{entry.decisionId ?? '—'}</dd><dt>Incident</dt><dd>{entry.incidentId ?? '—'}</dd></dl>
+                        <pre>{JSON.stringify(entry.metadata, null, 2)}</pre>
+                      </details>
+                    </td>
                   </tr>
                 ))}
               </tbody>

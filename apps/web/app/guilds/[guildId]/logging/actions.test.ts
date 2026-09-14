@@ -20,11 +20,14 @@ vi.mock('next/navigation', () => ({ redirect: mocks.redirect }));
 
 import { saveLoggingSettingsAction } from './actions';
 
-function formData(security = '', moderation = ''): FormData {
+function formData(security = '', moderation = '', messages = '', voice = '', retain = false): FormData {
   const data = new FormData();
   data.set('guildId', '100');
   data.set('securityChannelId', security);
   data.set('moderationChannelId', moderation);
+  data.set('messageChannelId', messages);
+  data.set('voiceChannelId', voice);
+  if (retain) data.set('storeDeletedMessageContent', 'yes');
   return data;
 }
 function setup() {
@@ -43,6 +46,8 @@ function setup() {
     listTextChannels: vi.fn().mockResolvedValue([
       { channelId: 'security', name: 'security-log' },
       { channelId: 'moderation', name: 'moderation-log' },
+      { channelId: 'messages', name: 'message-log' },
+      { channelId: 'voice', name: 'voice-log' },
     ]),
     canSendToChannel: vi.fn().mockResolvedValue(true),
   };
@@ -68,18 +73,24 @@ describe('logging settings action', () => {
       guildId: '100',
       securityChannelId: null,
       moderationChannelId: null,
+      messageChannelId: null,
+      voiceChannelId: null,
+      storeDeletedMessageContent: false,
       updatedBy: 'session-user',
     });
   });
 
   it('persists validated guild channels', async () => {
     const { discord, append, saveLoggingSettings } = setup();
-    await saveLoggingSettingsAction(formData('security', 'moderation'));
-    expect(discord.canSendToChannel).toHaveBeenCalledTimes(2);
+    await saveLoggingSettingsAction(formData('security', 'moderation', 'messages', 'voice', true));
+    expect(discord.canSendToChannel).toHaveBeenCalledTimes(4);
     expect(saveLoggingSettings).toHaveBeenCalledWith({
       guildId: '100',
       securityChannelId: 'security',
       moderationChannelId: 'moderation',
+      messageChannelId: 'messages',
+      voiceChannelId: 'voice',
+      storeDeletedMessageContent: true,
       updatedBy: 'session-user',
     });
     expect(append).toHaveBeenCalledWith({
@@ -94,11 +105,23 @@ describe('logging settings action', () => {
       metadata: {
         securityChannelId: 'security',
         moderationChannelId: 'moderation',
+        messageChannelId: 'messages',
+        voiceChannelId: 'voice',
+        storeDeletedMessageContent: true,
       },
     });
     expect(saveLoggingSettings.mock.invocationCallOrder[0]).toBeLessThan(
       append.mock.invocationCallOrder[0] ?? 0,
     );
+  });
+
+  it('allows all categories to share one validated channel', async () => {
+    const { saveLoggingSettings } = setup();
+    await saveLoggingSettingsAction(formData('security', 'security', 'security', 'security'));
+    expect(saveLoggingSettings).toHaveBeenCalledWith(expect.objectContaining({
+      securityChannelId: 'security', moderationChannelId: 'security',
+      messageChannelId: 'security', voiceChannelId: 'security',
+    }));
   });
 
   it('keeps a durably saved choice successful when its ledger hook fails', async () => {

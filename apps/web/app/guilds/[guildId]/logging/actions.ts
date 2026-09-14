@@ -33,7 +33,11 @@ export async function saveLoggingSettingsAction(formData: FormData): Promise<voi
   ]);
   const securityChannelId = optionalChannel(formData, 'securityChannelId');
   const moderationChannelId = optionalChannel(formData, 'moderationChannelId');
-  if (securityChannelId !== null || moderationChannelId !== null) {
+  const messageChannelId = optionalChannel(formData, 'messageChannelId');
+  const voiceChannelId = optionalChannel(formData, 'voiceChannelId');
+  const storeDeletedMessageContent = formData.get('storeDeletedMessageContent') === 'yes';
+  const destinations = [securityChannelId, moderationChannelId, messageChannelId, voiceChannelId];
+  if (destinations.some((channelId) => channelId !== null)) {
     const discord = getWebDiscordAdapter(runtime);
     if (discord === null) {
       throw new Error(
@@ -43,7 +47,7 @@ export async function saveLoggingSettingsAction(formData: FormData): Promise<voi
 
     const channels = await discord.listTextChannels(guildId);
     const channelIds = new Set(channels.map((channel) => channel.channelId));
-    for (const channelId of [securityChannelId, moderationChannelId]) {
+    for (const channelId of destinations) {
       if (channelId === null) continue;
       if (!channelIds.has(channelId)) {
         throw new Error('Selected logging destination is not a valid guild text channel.');
@@ -58,6 +62,9 @@ export async function saveLoggingSettingsAction(formData: FormData): Promise<voi
     guildId,
     securityChannelId,
     moderationChannelId,
+    messageChannelId,
+    voiceChannelId,
+    storeDeletedMessageContent,
     updatedBy: session.user.id,
   });
   try {
@@ -70,11 +77,16 @@ export async function saveLoggingSettingsAction(formData: FormData): Promise<voi
       targetId: guildId,
       decisionId: null,
       incidentId: null,
-      metadata: { securityChannelId, moderationChannelId },
+      metadata: {
+        securityChannelId, moderationChannelId, messageChannelId, voiceChannelId,
+        storeDeletedMessageContent,
+      },
     });
   } catch {
     // Settings are already durable; do not pretend they rolled back if recording fails.
   }
   revalidatePath(`/guilds/${guildId}/logging`);
   revalidatePath(`/guilds/${guildId}/setup`);
+  revalidatePath(`/guilds/${guildId}`);
+  revalidatePath(`/guilds/${guildId}/logs`);
 }
