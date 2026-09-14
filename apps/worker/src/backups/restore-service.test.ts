@@ -86,6 +86,24 @@ function executionPreview(): RestorePreview {
 
 describe('RestoreService', () => {
 
+  it('remaps all four logging channel references after channel recreation', async () => {
+    const made = makeService();
+    const preview: RestorePreview = {
+      guildId: '100', backupCreatedAt: snapshot.createdAt,
+      operations: [{
+        kind: 'KNIGHT_LOGGING', classification: 'REVERT',
+        reference: { securityChannelId: 'old', moderationChannelId: 'old', messageChannelId: 'old', voiceChannelId: 'old' },
+      }],
+    };
+    made.backups.getRecoveryJobById.mockResolvedValueOnce(runningJob({
+      phase: 'EXECUTION', preview, confirmedBy: 'owner-1',
+      checkpoint: { nextOperationIndex: 0, roleIdMap: {}, channelIdMap: { old: 'new' } },
+    }));
+    await made.service.processExecutionJob('job-1');
+    expect(made.ledger.remapLoggingChannelForRecovery).toHaveBeenCalledTimes(1);
+    expect(made.ledger.remapLoggingChannelForRecovery).toHaveBeenCalledWith(expect.objectContaining({ oldChannelId: 'old', newChannelId: 'new' }));
+  });
+
   it('claims one pending recovery job and dispatches by phase', async () => {
     const made = makeService();
     const previewSpy = vi.spyOn(made.service, 'processPreviewJob').mockResolvedValueOnce(undefined);

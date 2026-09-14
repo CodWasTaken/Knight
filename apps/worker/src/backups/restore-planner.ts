@@ -246,10 +246,18 @@ export function planRestore(
 
   if (
     snapshot.knight.logging !== null &&
-    [snapshot.knight.logging.securityChannelId, snapshot.knight.logging.moderationChannelId]
+    [snapshot.knight.logging.securityChannelId, snapshot.knight.logging.moderationChannelId,
+      snapshot.knight.logging.messageChannelId ?? null, snapshot.knight.logging.voiceChannelId ?? null]
       .some((channelId) => channelId !== null && recreatedChannelIds.has(channelId))
   ) {
-    operations.push({ kind: 'KNIGHT_LOGGING', classification: 'REVERT', reference: snapshot.knight.logging });
+    operations.push({
+      kind: 'KNIGHT_LOGGING', classification: 'REVERT',
+      reference: {
+        ...snapshot.knight.logging,
+        messageChannelId: snapshot.knight.logging.messageChannelId ?? null,
+        voiceChannelId: snapshot.knight.logging.voiceChannelId ?? null,
+      },
+    });
   }
   for (const reference of snapshot.knight.protectedResources) {
     const needsRemap =

@@ -143,7 +143,10 @@ describe('planRestore', () => {
       },
       knight: {
         staffProfiles: [{ profileId: 'profile-1', discordRoleId: 'old-role', profileVersionId: 'v1' }],
-        logging: { securityChannelId: 'old-channel', moderationChannelId: null },
+        logging: {
+          securityChannelId: 'old-channel', moderationChannelId: null,
+          messageChannelId: 'old-channel', voiceChannelId: 'old-channel',
+        },
         protectedResources: [{ resourceType: 'CHANNEL', resourceId: 'old-channel', level: 'CRITICAL' }],
       },
     });
@@ -163,6 +166,21 @@ describe('planRestore', () => {
     expect(preview.operations).toContainEqual(expect.objectContaining({
       kind: 'OVERWRITES', sourceChannelId: 'old-channel',
       overwrites: [expect.objectContaining({ id: 'old-role', type: 'ROLE' })],
+    }));
+  });
+
+  it('normalizes older version-1 logging references without Message or Voice fields', () => {
+    const legacy = snapshot({
+      knight: {
+        staffProfiles: [],
+        logging: { securityChannelId: 'channel-1', moderationChannelId: null } as never,
+        protectedResources: [],
+      },
+    });
+    const preview = planRestore(legacy, { guildId: '100', roles: [role()], channels: [] });
+    expect(preview.operations).toContainEqual(expect.objectContaining({
+      kind: 'KNIGHT_LOGGING',
+      reference: expect.objectContaining({ messageChannelId: null, voiceChannelId: null }),
     }));
   });
 });

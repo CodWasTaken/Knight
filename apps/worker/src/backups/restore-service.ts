@@ -462,6 +462,8 @@ export class RestoreService {
         const channelIds = [
           operation.reference.securityChannelId,
           operation.reference.moderationChannelId,
+          operation.reference.messageChannelId ?? null,
+          operation.reference.voiceChannelId ?? null,
         ].filter((value): value is string => value !== null);
         for (const oldChannelId of new Set(channelIds)) {
           const newChannelId = channelId(oldChannelId, checkpoint);

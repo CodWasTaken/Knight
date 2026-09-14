@@ -30,6 +30,8 @@ function makeService(options: { archiveEnabled?: boolean; policy?: unknown; capt
     getLoggingSettings: vi.fn().mockResolvedValue({
       securityChannelId: 'security-log',
       moderationChannelId: null,
+      messageChannelId: 'message-log',
+      voiceChannelId: 'voice-log',
     }),
   };
   const security = {
@@ -106,7 +108,10 @@ describe('BackupService', () => {
         discord: expect.objectContaining({ guildId: '100' }),
         knight: {
           staffProfiles: [{ profileId: 'profile-1', discordRoleId: 'role-1', profileVersionId: 'version-3' }],
-          logging: { securityChannelId: 'security-log', moderationChannelId: null },
+          logging: {
+            securityChannelId: 'security-log', moderationChannelId: null,
+            messageChannelId: 'message-log', voiceChannelId: 'voice-log',
+          },
           protectedResources: [{ resourceType: 'CHANNEL', resourceId: 'channel-9', level: 'CRITICAL' }],
         },
         messageArchives: [],

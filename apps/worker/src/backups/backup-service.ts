@@ -41,6 +41,8 @@ type BackupDependencies = Readonly<{
     getLoggingSettings(guildId: string): Promise<{
       securityChannelId: string | null;
       moderationChannelId: string | null;
+      messageChannelId: string | null;
+      voiceChannelId: string | null;
     } | null>;
   };
   security: {
@@ -152,6 +154,8 @@ export class BackupService {
             ? {
                 securityChannelId: logging.securityChannelId,
                 moderationChannelId: logging.moderationChannelId,
+                messageChannelId: logging.messageChannelId,
+                voiceChannelId: logging.voiceChannelId,
               }
             : null,
           protectedResources: protectedResources.map(protectedReference),

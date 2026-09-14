@@ -78,6 +78,8 @@ export type KnightStaffProfileRecoveryReference = Readonly<{
 export type KnightLoggingRecoveryReference = Readonly<{
   securityChannelId: string | null;
   moderationChannelId: string | null;
+  messageChannelId?: string | null;
+  voiceChannelId?: string | null;
 }>;
 
 export type KnightProtectedResourceRecoveryReference = Readonly<{
