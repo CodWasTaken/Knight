@@ -132,6 +132,12 @@ describe('NativeEventService', () => {
     expect(deps.firewall.handleWebhookUpdate).toHaveBeenCalledWith('g1', 'channel-1');
   });
 
+  it.each(['member.ban', 'member.unban'])('routes attributable native %s to Moderation', async (action) => {
+    const deps = dependencies();
+    await new NativeEventService(deps).record({ ...event, action });
+    expect(deps.recorder.record).toHaveBeenCalledWith(expect.objectContaining({ action }), 'MODERATION');
+  });
+
   it('still applies explicit firewall handling when the native ledger append fails', async () => {
     const deps = dependencies();
     deps.recorder.record.mockRejectedValueOnce(new Error('ledger unavailable'));

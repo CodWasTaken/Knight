@@ -18,6 +18,8 @@ import { closeRedis, createRedis, ExecutionCorrelationStore, RateLimitStore } fr
 import { authorizeGuardedAction } from '@knight/security';
 import { Events, MessageFlags, type Client, type Interaction } from 'discord.js';
 import { BackupCommandService } from './commands/backup.js';
+import { ActivityLogService } from './activity/activity-log-service.js';
+import { installActivityListeners } from './activity/install-activity-listeners.js';
 import { routeInteraction, type CommandRouterDependencies } from './commands/router.js';
 import { createDiscordClient } from './discord-client.js';
 import { registerCommands } from './register-commands.js';
@@ -194,6 +196,14 @@ export async function startBot(
         recorder: nativeRecorder,
         now: () => new Date(),
       }),
+    }),
+  );
+  installActivityListeners(
+    client,
+    new ActivityLogService({
+      ledger: new SecurityLedgerRepository(database),
+      recorder: nativeRecorder,
+      messageContentAvailable: env.ENABLE_MESSAGE_CONTENT_ARCHIVE,
     }),
   );
   const dependencies = createCommandRouterDependencies({

@@ -1,10 +1,12 @@
-import { Client, GatewayIntentBits } from 'discord.js';
+import { Client, GatewayIntentBits, Partials, type ClientOptions } from 'discord.js';
 
 export const KNIGHT_GATEWAY_INTENTS = [
   GatewayIntentBits.Guilds,
   GatewayIntentBits.GuildMembers,
   GatewayIntentBits.GuildModeration,
   GatewayIntentBits.GuildWebhooks,
+  GatewayIntentBits.GuildMessages,
+  GatewayIntentBits.GuildVoiceStates,
 ] as const;
 
 export function gatewayIntentsForArchive(enableMessageArchive: boolean): readonly GatewayIntentBits[] {
@@ -14,5 +16,12 @@ export function gatewayIntentsForArchive(enableMessageArchive: boolean): readonl
 }
 
 export function createDiscordClient(enableMessageArchive = false): Client {
-  return new Client({ intents: gatewayIntentsForArchive(enableMessageArchive) });
+  return new Client(discordClientOptions(enableMessageArchive));
+}
+
+export function discordClientOptions(enableMessageArchive: boolean): ClientOptions {
+  return {
+    intents: gatewayIntentsForArchive(enableMessageArchive),
+    partials: [Partials.Message],
+  };
 }

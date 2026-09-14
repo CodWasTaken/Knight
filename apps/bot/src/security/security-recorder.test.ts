@@ -30,9 +30,11 @@ function makeRecorder(sendRejects = false) {
       guildId: 'g1',
       securityChannelId: 'security-log',
       moderationChannelId: 'moderation-log',
+      messageChannelId: 'message-log',
+      voiceChannelId: 'voice-log',
     }),
   };
-  const sendChannelMessage = vi.fn(async () => {
+  const sendChannelMessage = vi.fn(async (_channelId: string, _message: string) => {
     order.push('send');
     if (sendRejects) throw new Error('Discord unavailable');
   });
@@ -90,5 +92,29 @@ describe('SecurityRecorder', () => {
     expect(ledger.append).toHaveBeenCalledTimes(1);
     expect(ledger.getLoggingSettings).not.toHaveBeenCalled();
     expect(sendChannelMessage).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['SECURITY', 'security-log'], ['MODERATION', 'moderation-log'],
+    ['MESSAGES', 'message-log'], ['VOICE', 'voice-log'],
+  ] as const)('routes %s notifications to its independent destination', async (kind, channelId) => {
+    const { recorder, sendChannelMessage } = makeRecorder();
+    await recorder.record(input, kind);
+    expect(sendChannelMessage).toHaveBeenCalledWith(channelId, expect.any(String));
+  });
+
+  it('neutralizes mentions and stays below Discord message limits', async () => {
+    const { recorder, sendChannelMessage } = makeRecorder();
+    await recorder.record({
+      ...input,
+      action: 'message.delete',
+      metadata: { channelId: 'c1', authorUserId: 'u1', content: '@everyone @here <@123> <@&456>' + 'x'.repeat(3000) },
+    }, 'MESSAGES');
+    const sent = sendChannelMessage.mock.calls[0]?.[1] as string;
+    expect(sent.length).toBeLessThan(2000);
+    expect(sent).not.toContain('@everyone');
+    expect(sent).not.toContain('@here');
+    expect(sent).not.toContain('<@123>');
+    expect(sent).not.toContain('<@&456>');
   });
 });

@@ -117,7 +117,7 @@ export class NativeEventService {
           executionId,
         },
       },
-      'SECURITY',
+      input.action === 'member.ban' || input.action === 'member.unban' ? 'MODERATION' : 'SECURITY',
     );
   }
 }
