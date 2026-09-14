@@ -252,7 +252,9 @@ export default async function SetupPage({
               roles, but Knight will still enter Guarded mode after owner confirmation.
             </p>
           ) : (
-            <div className="previewTable" role="table" aria-label="Guarded role permission preview">
+            <details className="advancedDetails">
+              <summary>Advanced permission changes for {preview.roles.length} affected role{preview.roles.length === 1 ? '' : 's'}</summary>
+              <div className="previewTable" role="table" aria-label="Guarded role permission preview">
               {preview.roles.map((role) => (
                 <div className="previewRow" role="row" key={role.roleId}>
                   <div>
@@ -273,7 +275,8 @@ export default async function SetupPage({
                   </div>
                 </div>
               ))}
-            </div>
+              </div>
+            </details>
           )}
           {isOwner ? (
             <form action={enableGuardedBanAction} className="setupAction guardedConfirm">
@@ -297,7 +300,7 @@ export default async function SetupPage({
       ) : null}
 
       {state.mode === GuildMode.Guarded ? (
-        <section className="panel setupPanel">
+        <section className="panel setupPanel" id="guarded-rollback">
           <p className="eyebrow">Rollback</p>
           <h2>Guarded Moderation is active</h2>
           <p className="lede">
@@ -338,7 +341,10 @@ export default async function SetupPage({
         <p>Erases Knight setup, staff, policies, logs, security history, protection, Guarded state, backup records, and local Knight backup files.</p>
         <p><strong>Discord roles, channels, members, webhooks, and permissions are not touched.</strong></p>
         {!resetPreflight.allowed ? (
-          <div className="notice noticeDanger"><ul>{resetPreflight.blockers.map((blocker) => <li key={blocker}>{blocker}</li>)}</ul></div>
+          <div className="notice noticeDanger">
+            <ul>{resetPreflight.blockers.map((blocker) => <li key={blocker}>{blocker}</li>)}</ul>
+            {resetPreflight.blockers.some((blocker) => blocker.includes('Rollback Guarded')) ? <Link href="#guarded-rollback">Go to Guarded rollback</Link> : null}
+          </div>
         ) : resetPreflight.isOwner ? (
           <details>
             <summary className="danger">Reveal factory reset confirmation</summary>

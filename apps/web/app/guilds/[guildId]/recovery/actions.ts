@@ -1,12 +1,12 @@
 'use server';
 
 import { BACKUP_POLICY_MODES, type BackupPolicyMode } from '@knight/contracts';
-import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { auth } from '../../../../auth';
 import { requireGuildAccess } from '../../../../lib/authorization';
 import { getWebDiscordAdapter } from '../../../../lib/discord-runtime';
 import { getWebRuntime } from '../../../../lib/server-runtime';
+import { runWithActionFeedback } from '../../../../lib/action-feedback';
 
 const POLICY_MODES = new Set<string>(BACKUP_POLICY_MODES);
 
@@ -43,6 +43,7 @@ export async function requestRestorePreviewAction(formData: FormData): Promise<v
   const backupId = requiredString(formData, 'backupId');
   const runtime = getWebRuntime();
   await requireGuildAccess(guildId, session, runtime.repositories);
+  await runWithActionFeedback(`/guilds/${guildId}/recovery`, [`/guilds/${guildId}/recovery`], async () => {
 
   const backup = await runtime.repositories.backups.getBackup(guildId, backupId);
   if (
@@ -54,7 +55,7 @@ export async function requestRestorePreviewAction(formData: FormData): Promise<v
   await runtime.repositories.backups.enqueueRestorePreview({
     guildId, backupId, requestedBy: session.user.id,
   });
-  revalidatePath(`/guilds/${guildId}/recovery`);
+  });
 }
 
 export async function confirmRestoreAction(formData: FormData): Promise<void> {
@@ -64,6 +65,7 @@ export async function confirmRestoreAction(formData: FormData): Promise<void> {
   const jobId = requiredString(formData, 'jobId');
   const runtime = getWebRuntime();
   const role = await requireGuildAccess(guildId, session, runtime.repositories);
+  await runWithActionFeedback(`/guilds/${guildId}/recovery`, [`/guilds/${guildId}/recovery`], async () => {
   if (role !== 'OWNER') throw new Error('Recovery execution requires the Discord guild owner.');
   if (formData.get('confirmRestore') !== 'CONFIRM') {
     throw new Error('Recovery execution requires explicit confirmation.');
@@ -71,7 +73,7 @@ export async function confirmRestoreAction(formData: FormData): Promise<void> {
   await runtime.repositories.backups.confirmRestore({
     guildId, jobId, confirmedBy: session.user.id,
   });
-  revalidatePath(`/guilds/${guildId}/recovery`);
+  });
 }
 
 export async function retryRestoreAction(formData: FormData): Promise<void> {
@@ -81,9 +83,10 @@ export async function retryRestoreAction(formData: FormData): Promise<void> {
   const jobId = requiredString(formData, 'jobId');
   const runtime = getWebRuntime();
   const role = await requireGuildAccess(guildId, session, runtime.repositories);
+  await runWithActionFeedback(`/guilds/${guildId}/recovery`, [`/guilds/${guildId}/recovery`], async () => {
   if (role !== 'OWNER') throw new Error('Recovery retry requires the Discord guild owner.');
   await runtime.repositories.backups.retryRestore({ guildId, jobId });
-  revalidatePath(`/guilds/${guildId}/recovery`);
+  });
 }
 
 export async function queueBackupNowAction(formData: FormData): Promise<void> {
@@ -92,11 +95,12 @@ export async function queueBackupNowAction(formData: FormData): Promise<void> {
   const guildId = requiredString(formData, 'guildId');
   const runtime = getWebRuntime();
   await requireGuildAccess(guildId, session, runtime.repositories);
+  await runWithActionFeedback(`/guilds/${guildId}/recovery`, [`/guilds/${guildId}/recovery`], async () => {
   await runtime.repositories.backups.enqueueBackup({
     guildId,
     requestedBy: session.user.id,
   });
-  revalidatePath(`/guilds/${guildId}/recovery`);
+  });
 }
 
 export async function saveBackupPolicyAction(formData: FormData): Promise<void> {
@@ -111,6 +115,7 @@ export async function saveBackupPolicyAction(formData: FormData): Promise<void> 
 
   const runtime = getWebRuntime();
   await requireGuildAccess(guildId, session, runtime.repositories);
+  await runWithActionFeedback(`/guilds/${guildId}/recovery`, [`/guilds/${guildId}/recovery`, `/guilds/${guildId}/setup`], async () => {
 
   if (selectedChannelIds.length > 0 && !runtime.env.ENABLE_MESSAGE_CONTENT_ARCHIVE) {
     throw new Error(
@@ -137,6 +142,5 @@ export async function saveBackupPolicyAction(formData: FormData): Promise<void> 
     maxMessagesPerChannel,
     updatedBy: session.user.id,
   });
-  revalidatePath(`/guilds/${guildId}/recovery`);
-  revalidatePath(`/guilds/${guildId}/setup`);
+  });
 }

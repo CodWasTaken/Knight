@@ -42,4 +42,11 @@ describe('dashboard shell structure', () => {
     expect(css).toMatch(/\.guildNav\s*\{/);
     expect(css).toMatch(/@media\s*\(max-width:\s*\d+px\)[\s\S]*\.guildNav/);
   });
+
+  it('defines danger controls, disabled-button help, and advanced troubleshooting details', async () => {
+    const css = await source('../app/globals.css');
+    expect(css).toMatch(/\.danger\s*\{/);
+    expect(css).toMatch(/\.buttonHelp\s*\{/);
+    expect(css).toMatch(/\.advancedDetails\s*\{/);
+  });
 });

@@ -3,11 +3,13 @@ import Link from 'next/link';
 import { getWebDiscordAdapter } from '../../../../lib/discord-runtime';
 import { getWebRuntime } from '../../../../lib/server-runtime';
 import { createStaffProfileAction } from './actions';
+import { actionNotice } from '../../../../lib/action-feedback';
 
 export default async function StaffProfilesPage({
   params,
-}: Readonly<{ params: Promise<{ guildId: string }> }>) {
-  const { guildId } = await params;
+  searchParams = Promise.resolve({}),
+}: Readonly<{ params: Promise<{ guildId: string }>; searchParams?: Promise<{ notice?: string | string[] }> }>) {
+  const [{ guildId }, query] = await Promise.all([params, searchParams]);
   const runtime = getWebRuntime();
   const { staff, guilds } = runtime.repositories;
   const [profiles, guild] = await Promise.all([
@@ -37,12 +39,14 @@ export default async function StaffProfilesPage({
 
   return (
     <main className="shell">
+      {actionNotice(query.notice) ? <div className="notice" role="status">{actionNotice(query.notice)}</div> : null}
       <header className="topbar">
         <div>
           <p className="eyebrow">Staff Profiles</p>
           <h1>Versioned staff authority</h1>
           <p className="muted">
-            Knight assignments are authoritative. Discord roles are the mapped representation.
+            Knight assignments are authoritative. A Discord role mapping represents a profile but
+            does not grant Knight authority unless the member also has an active Knight assignment.
           </p>
         </div>
       </header>
@@ -73,7 +77,7 @@ export default async function StaffProfilesPage({
               <span>Knight rank</span>
               <input min="0" name="rank" required step="1" type="number" />
             </label>
-            <button type="submit">Create profile</button>
+            <button className="primary" type="submit">Create profile</button>
           </form>
         ) : guild?.mode === GuildMode.Guarded ? (
           <p className="notice">Create or remap Staff Profiles after rolling Guarded mode back to Test.</p>
@@ -107,7 +111,7 @@ export default async function StaffProfilesPage({
               <dl>
                 <div>
                   <dt>Mapped role</dt>
-                  <dd>{profile.discordRoleId}</dd>
+                  <dd>{discordState?.roles.find((role) => role.roleId === profile.discordRoleId)?.name ?? 'Unavailable'}</dd>
                 </div>
                 <div>
                   <dt>Active members</dt>

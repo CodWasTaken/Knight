@@ -13,7 +13,7 @@ Knight includes:
 - Versioned Staff Profile metadata/policy editing in the dashboard, with existing-role mapping and Security Manager grant ceilings.
 - Observe, Test, and Guarded operating modes.
 - Guarded replacement of Discord Ban Members, Kick Members, Moderate Members, and Manage Messages for mapped staff roles, with exact permission snapshots and rollback.
-- PostgreSQL authority/persistence, hash-chained Security Ledger, configurable logging destinations, protected resources, and explicit bot/webhook firewall modes.
+- PostgreSQL authority/persistence, hash-chained Security Ledger, independent Security, Moderation, Messages, and Voice notification destinations, protected resources, and explicit bot/webhook firewall modes.
 - Local gzip structural backups with SHA-256 verification, preview-first owner-confirmed recovery, durable checkpoints, and worker-only backup-volume access.
 - Redis operational rate/lock state, health endpoints, `/doctor`, a worker process, and Docker Compose deployment.
 
@@ -58,7 +58,9 @@ pnpm test
 pnpm build
 git diff --check
 docker build --tag knight-ci .
-docker compose config
+docker compose config >/dev/null
 ```
 
 Use disposable PostgreSQL/Redis services for verification. Never commit `.env`, bot tokens, OAuth secrets, database credentials, or Redis credentials. `.env.example` contains field names and local examples only.
+
+Compose services use `restart: "no"`: start Knight manually with `docker compose up -d` and stop it with `docker compose stop`. After source changes—including slash-command changes—use `docker compose up -d --build`; restarting a stale image will not publish new code. `docker compose config` expands environment values, including secrets, so validate it with output redirected and never paste its expanded output publicly.

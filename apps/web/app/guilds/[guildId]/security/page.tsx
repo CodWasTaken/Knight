@@ -8,6 +8,7 @@ import {
   saveFirewallSettingsAction,
   saveInventoryTrustAction,
 } from './actions';
+import { actionNotice } from '../../../../lib/action-feedback';
 
 const MODES = ['OBSERVE', 'ALERT', 'ENFORCE'] as const;
 const TRUST_STATES = ['TRUSTED', 'APPROVED', 'UNKNOWN', 'BLOCKED'] as const;
@@ -22,8 +23,9 @@ const LOCKDOWN_SCOPES = [
 
 export default async function SecurityPage({
   params,
-}: Readonly<{ params: Promise<{ guildId: string }> }>) {
-  const { guildId } = await params;
+  searchParams = Promise.resolve({}),
+}: Readonly<{ params: Promise<{ guildId: string }>; searchParams?: Promise<{ notice?: string | string[] }> }>) {
+  const [{ guildId }, query] = await Promise.all([params, searchParams]);
   const security = getWebRuntime().repositories.security;
   const [emergency, settings, incidents, bots, webhooks] = await Promise.all([
     security.getSecurityState(guildId),
@@ -52,6 +54,7 @@ export default async function SecurityPage({
 
   return (
     <main className="shell">
+      {actionNotice(query.notice) ? <div className="notice" role="status">{actionNotice(query.notice)}</div> : null}
       <header className="topbar">
         <div>
           <p className="eyebrow">Security</p>
@@ -106,7 +109,7 @@ export default async function SecurityPage({
               <input name="confirm" required type="checkbox" />
               <span>Confirm Panic</span>
             </label>
-            <button type="submit">Activate Panic</button>
+            <button className="danger" type="submit">Activate Panic</button>
           </form>
           <form action={clearPanicAction} className="previewRow">
             <input name="guildId" type="hidden" value={guildId} />
@@ -122,7 +125,8 @@ export default async function SecurityPage({
       <section className="panel">
         <h2>Firewall modes</h2>
         <p className="muted">
-          Unknown bots and webhooks are never removed automatically, including in Enforce.
+          Observe records activity only. Alert records and notifies. Enforce removes entries marked
+          Blocked; unknown bots and webhooks are never removed automatically.
         </p>
         <form action={saveFirewallSettingsAction} className="metadataForm loggingForm">
           <input name="guildId" type="hidden" value={guildId} />

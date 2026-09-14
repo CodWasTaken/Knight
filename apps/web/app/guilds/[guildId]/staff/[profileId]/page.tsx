@@ -11,11 +11,13 @@ import {
   updateStaffProfilePolicyAction,
 } from '../actions';
 import { RateLimitEditor } from '../rate-limit-editor';
+import { actionNotice } from '../../../../../lib/action-feedback';
 
 export default async function StaffProfilePage({
   params,
-}: Readonly<{ params: Promise<{ guildId: string; profileId: string }> }>) {
-  const { guildId, profileId } = await params;
+  searchParams = Promise.resolve({}),
+}: Readonly<{ params: Promise<{ guildId: string; profileId: string }>; searchParams?: Promise<{ notice?: string | string[] }> }>) {
+  const [{ guildId, profileId }, query] = await Promise.all([params, searchParams]);
   const runtime = getWebRuntime();
   const { staff, guilds } = runtime.repositories;
   const [profile, assignments, guild] = await Promise.all([
@@ -43,13 +45,15 @@ export default async function StaffProfilePage({
 
   return (
     <main className="shell">
+      {actionNotice(query.notice) ? <div className="notice" role="status">{actionNotice(query.notice)}</div> : null}
       <header className="topbar">
         <div>
           <p className="eyebrow">Staff Profile</p>
           <h1>{profile.profileName ?? profile.profileId}</h1>
           <p className="muted">
             Every save creates a new immutable authority version. Discord roles remain only the
-            mapped representation of Knight state.
+            mapped representation of Knight state; role membership does not grant Knight authority
+            without an active Knight assignment.
           </p>
         </div>
       </header>

@@ -23,6 +23,10 @@ Every unrelated Discord permission bit is preserved. Knight warnings are not a n
 
 Profile creation and mapped-role changes are blocked while `GUARDED` is active. Roll back to `TEST` before remapping Staff Profiles.
 
+If no mapped role currently contains any of the four native permissions, Guarded activation is a valid no-op: Knight writes no fake snapshots and makes no Discord permission writes, but still records that snapshots were not required and changes `TEST → GUARDED`. The owner can later roll back `GUARDED → TEST` without snapshots. This explicit no-op metadata is distinct from a missing snapshot in a real migration; Knight never treats the latter as safe.
+
+Factory Reset is unavailable while Guarded is active. Use the owner-only rollback first.
+
 ## Rollback
 
 Only the guild owner can roll Guarded moderation back to Test. Knight restores the latest saved exact role permission bigints before changing mode. If a multi-role enable operation fails partway through, Knight attempts compensation from the snapshots rather than silently leaving partially migrated authority.

@@ -39,6 +39,30 @@ button.secondary {
   color: #f2f3f5;
   border: 1px solid #3f4147;
 }
+.primary {
+  background: #5865f2;
+  color: #ffffff;
+}
+.danger {
+  background: #b23a48;
+  color: #ffffff;
+}
+.buttonHelp {
+  margin-top: 0.55rem;
+  color: #b5bac1;
+  font-size: 0.86rem;
+}
+.advancedDetails {
+  margin-top: 1rem;
+  color: #b5bac1;
+}
+.advancedDetails summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+.dangerZone {
+  border-color: #7a3f49;
+}
 .shell {
   width: min(1080px, calc(100% - 2rem));
   margin: 0 auto;

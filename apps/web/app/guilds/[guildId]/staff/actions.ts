@@ -5,13 +5,13 @@ import {
   READ_ONLY_ACTIONS,
   type ActionId,
 } from '@knight/contracts';
-import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { auth } from '../../../../auth';
 import { requireGuildAccess } from '../../../../lib/authorization';
 import { getWebDiscordAdapter } from '../../../../lib/discord-runtime';
 import { requireEmergencyScopesAvailable } from '../../../../lib/emergency-state';
 import { getWebRuntime, type WebRuntime } from '../../../../lib/server-runtime';
+import { runWithActionFeedback } from '../../../../lib/action-feedback';
 import {
   createStaffProfileFromDashboard,
   updateStaffProfileFromDashboard,
@@ -87,10 +87,6 @@ async function authorizedStaffRuntime(formData: FormData): Promise<{
   const guildId = requiredString(formData, 'guildId');
   const runtime = getWebRuntime();
   await requireGuildAccess(guildId, session, runtime.repositories);
-  await requireEmergencyScopesAvailable(runtime.repositories.security, guildId, [
-    'ROLES',
-    'SECURITY_CONFIG',
-  ]);
   return { guildId, actorUserId: session.user.id, runtime };
 }
 
@@ -104,13 +100,10 @@ function dashboardDependencies(runtime: WebRuntime) {
   return { ...runtime.repositories, discord };
 }
 
-function revalidateStaff(guildId: string, profileId?: string): void {
-  revalidatePath(`/guilds/${guildId}/staff`);
-  if (profileId !== undefined) revalidatePath(`/guilds/${guildId}/staff/${profileId}`);
-}
-
 export async function createStaffProfileAction(formData: FormData): Promise<void> {
   const { guildId, actorUserId, runtime } = await authorizedStaffRuntime(formData);
+  await runWithActionFeedback(`/guilds/${guildId}/staff`, [`/guilds/${guildId}/staff`], async () => {
+  await requireEmergencyScopesAvailable(runtime.repositories.security, guildId, ['ROLES', 'SECURITY_CONFIG']);
   await createStaffProfileFromDashboard(
     {
       guildId,
@@ -121,12 +114,14 @@ export async function createStaffProfileAction(formData: FormData): Promise<void
     { userId: actorUserId },
     dashboardDependencies(runtime),
   );
-  revalidateStaff(guildId);
+  });
 }
 
 export async function updateStaffProfileMetadataAction(formData: FormData): Promise<void> {
   const { guildId, actorUserId, runtime } = await authorizedStaffRuntime(formData);
   const profileId = requiredString(formData, 'profileId');
+  await runWithActionFeedback(`/guilds/${guildId}/staff/${profileId}`, [`/guilds/${guildId}/staff`, `/guilds/${guildId}/staff/${profileId}`], async () => {
+  await requireEmergencyScopesAvailable(runtime.repositories.security, guildId, ['ROLES', 'SECURITY_CONFIG']);
   await updateStaffProfileFromDashboard(
     {
       guildId,
@@ -138,12 +133,14 @@ export async function updateStaffProfileMetadataAction(formData: FormData): Prom
     { userId: actorUserId },
     dashboardDependencies(runtime),
   );
-  revalidateStaff(guildId, profileId);
+  });
 }
 
 export async function updateStaffProfilePolicyAction(formData: FormData): Promise<void> {
   const { guildId, actorUserId, runtime } = await authorizedStaffRuntime(formData);
   const profileId = requiredString(formData, 'profileId');
+  await runWithActionFeedback(`/guilds/${guildId}/staff/${profileId}`, [`/guilds/${guildId}/staff`, `/guilds/${guildId}/staff/${profileId}`], async () => {
+  await requireEmergencyScopesAvailable(runtime.repositories.security, guildId, ['ROLES', 'SECURITY_CONFIG']);
 
   const current = await runtime.repositories.staff.getCurrentProfileVersion(guildId, profileId);
   if (current === null) {
@@ -161,5 +158,5 @@ export async function updateStaffProfilePolicyAction(formData: FormData): Promis
     runtime.repositories,
   );
 
-  revalidateStaff(guildId, profileId);
+  });
 }

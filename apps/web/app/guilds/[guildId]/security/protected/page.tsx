@@ -2,24 +2,27 @@ import { ProtectionLevel } from '@knight/contracts';
 import { getWebDiscordAdapter } from '../../../../../lib/discord-runtime';
 import { getWebRuntime } from '../../../../../lib/server-runtime';
 import { removeProtectedResourceAction, saveProtectedResourceAction } from './actions';
+import { actionNotice } from '../../../../../lib/action-feedback';
 
 export default async function ProtectedResourcesPage({
   params,
-}: Readonly<{ params: Promise<{ guildId: string }> }>) {
-  const { guildId } = await params;
+  searchParams = Promise.resolve({}),
+}: Readonly<{ params: Promise<{ guildId: string }>; searchParams?: Promise<{ notice?: string | string[] }> }>) {
+  const [{ guildId }, query] = await Promise.all([params, searchParams]);
   const runtime = getWebRuntime();
   const resources = await runtime.repositories.security.listProtectedResources(guildId);
   const discordAvailable = getWebDiscordAdapter(runtime) !== null;
 
   return (
     <main className="shell">
+      {actionNotice(query.notice) ? <div className="notice" role="status">{actionNotice(query.notice)}</div> : null}
       <header className="topbar">
         <div>
           <p className="eyebrow">Protected resources</p>
           <h1>Users, roles, and channels</h1>
           <p className="lede">
-            Important and Critical resources require approval. Immutable resources block ordinary
-            staff mutation.
+            Important requires elevated approval, Critical requires owner-level approval, and
+            Immutable blocks ordinary staff mutation until its protection is deliberately changed.
           </p>
         </div>
       </header>
@@ -57,6 +60,7 @@ export default async function ProtectedResourcesPage({
           <button disabled={!discordAvailable} type="submit">
             Save protection
           </button>
+          {!discordAvailable ? <p className="buttonHelp">Enable live Discord validation before saving this important change.</p> : null}
         </form>
       </section>
 

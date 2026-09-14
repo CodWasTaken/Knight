@@ -20,7 +20,7 @@ In Docker Compose, `KNIGHT_BACKUP_DIR=/data/knight-backups` and the `knight-back
 
 ## Structural scope
 
-Snapshots cover the supported Discord structure Knight can safely reason about: roles and role order, categories and text channels, parent/position relationships, permission overwrites, and Knight references to Staff Profile roles, logging channels, and protected resources.
+Snapshots cover the supported Discord structure Knight can safely reason about: roles and role order, categories and text channels, parent/position relationships, permission overwrites, and Knight references to Staff Profile roles, all four logging channels, and protected resources. Older version-1 snapshots with only Security/Moderation logging references remain readable; missing Messages/Voice references normalize to Disabled.
 
 Managed Discord roles are reference-only. Knight never claims it can recreate an integration-managed role. Unsupported channel types are not treated as recoverable structural resources.
 
@@ -53,7 +53,9 @@ Archived messages are never replayed, and managed roles are never recreated.
 
 The worker checkpoints after each completed restore operation. A failed operation stops execution immediately, records the error, and preserves the last completed checkpoint. Owner-only **Retry** resumes from that durable checkpoint rather than starting completed stages again.
 
-A Redis lock named for the guild prevents two recovery executions from running concurrently. PostgreSQL remains the durable job/checkpoint authority if Redis restarts.
+A Redis lock named for the guild prevents backup, recovery, and Factory Reset execution from running concurrently. PostgreSQL remains the durable job/checkpoint authority if Redis restarts. Pending/running Factory Reset blocks new backup/restore queue, confirm, and retry transitions.
+
+Factory Reset is a separate owner-only, worker-executed operation. It removes the guild's Knight backup files and Knight database state, but never changes Discord structure. It is refused while Guarded, Panic, configuration-blocking Lockdown, backup/recovery work, or another reset is active.
 
 ## Operator workflow
 

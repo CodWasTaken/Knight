@@ -2,13 +2,13 @@
 
 import { ProtectionLevel } from '@knight/contracts';
 import type { SecurityResourceType } from '@knight/database/repositories/security-repository';
-import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { auth } from '../../../../../auth';
 import { requireGuildAccess } from '../../../../../lib/authorization';
 import { getWebDiscordAdapter } from '../../../../../lib/discord-runtime';
 import { requireEmergencyScopesAvailable } from '../../../../../lib/emergency-state';
 import { getWebRuntime } from '../../../../../lib/server-runtime';
+import { runWithActionFeedback } from '../../../../../lib/action-feedback';
 
 const RESOURCE_TYPES = new Set<SecurityResourceType>(['USER', 'ROLE', 'CHANNEL']);
 const LEVELS = new Set<ProtectionLevel>([
@@ -45,6 +45,7 @@ function resourceInput(formData: FormData) {
 export async function saveProtectedResourceAction(formData: FormData): Promise<void> {
   const { guildId, runtime, actorUserId } = await authorized(formData);
   const { resourceType, resourceId } = resourceInput(formData);
+  await runWithActionFeedback(`/guilds/${guildId}/security/protected`, [`/guilds/${guildId}/security`, `/guilds/${guildId}/security/protected`], async () => {
   await requireEmergencyScopesAvailable(runtime.repositories.security, guildId, [
     'SECURITY_CONFIG',
     ...(resourceType === 'ROLE' ? (['ROLES'] as const) : []),
@@ -92,13 +93,13 @@ export async function saveProtectedResourceAction(formData: FormData): Promise<v
   } catch {
     // The protected resource is already durable.
   }
-  revalidatePath(`/guilds/${guildId}/security`);
-  revalidatePath(`/guilds/${guildId}/security/protected`);
+  });
 }
 
 export async function removeProtectedResourceAction(formData: FormData): Promise<void> {
   const { guildId, runtime, actorUserId } = await authorized(formData);
   const { resourceType, resourceId } = resourceInput(formData);
+  await runWithActionFeedback(`/guilds/${guildId}/security/protected`, [`/guilds/${guildId}/security`, `/guilds/${guildId}/security/protected`], async () => {
   await requireEmergencyScopesAvailable(runtime.repositories.security, guildId, [
     'SECURITY_CONFIG',
     ...(resourceType === 'ROLE' ? (['ROLES'] as const) : []),
@@ -126,6 +127,5 @@ export async function removeProtectedResourceAction(formData: FormData): Promise
   } catch {
     // The removal is already durable.
   }
-  revalidatePath(`/guilds/${guildId}/security`);
-  revalidatePath(`/guilds/${guildId}/security/protected`);
+  });
 }

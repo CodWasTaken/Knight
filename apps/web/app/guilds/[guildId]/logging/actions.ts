@@ -1,12 +1,12 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { auth } from '../../../../auth';
 import { requireGuildAccess } from '../../../../lib/authorization';
 import { getWebDiscordAdapter } from '../../../../lib/discord-runtime';
 import { requireEmergencyScopesAvailable } from '../../../../lib/emergency-state';
 import { getWebRuntime } from '../../../../lib/server-runtime';
+import { runWithActionFeedback } from '../../../../lib/action-feedback';
 
 function requiredString(formData: FormData, name: string): string {
   const value = formData.get(name);
@@ -28,6 +28,9 @@ export async function saveLoggingSettingsAction(formData: FormData): Promise<voi
   const guildId = requiredString(formData, 'guildId');
   const runtime = getWebRuntime();
   await requireGuildAccess(guildId, session, runtime.repositories);
+  await runWithActionFeedback(`/guilds/${guildId}/logging`, [
+    `/guilds/${guildId}/logging`, `/guilds/${guildId}/setup`, `/guilds/${guildId}`, `/guilds/${guildId}/logs`,
+  ], async () => {
   await requireEmergencyScopesAvailable(runtime.repositories.security, guildId, [
     'SECURITY_CONFIG',
   ]);
@@ -85,8 +88,5 @@ export async function saveLoggingSettingsAction(formData: FormData): Promise<voi
   } catch {
     // Settings are already durable; do not pretend they rolled back if recording fails.
   }
-  revalidatePath(`/guilds/${guildId}/logging`);
-  revalidatePath(`/guilds/${guildId}/setup`);
-  revalidatePath(`/guilds/${guildId}`);
-  revalidatePath(`/guilds/${guildId}/logs`);
+  });
 }

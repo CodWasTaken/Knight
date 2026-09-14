@@ -44,7 +44,7 @@ export default async function GuildHome({
         <section className="panel"><h2>Staff Profiles</h2><p>{profiles.length} configured</p><Link href={`/guilds/${guildId}/staff`}>Manage Staff Profiles</Link></section>
         <section className="panel"><h2>Current blockers</h2><p>{setupComplete ? 'No setup blocker.' : `Complete ${setup?.step ?? 'WELCOME'} before entering Test mode.`}</p><strong>Next action</strong><p><Link className="inlineAction" href={`/guilds/${guildId}/${setupComplete ? 'logging' : 'setup'}`}>{setupComplete ? 'Review logging' : 'Continue setup'} →</Link></p></section>
       </section>
-      <details className="panel"><summary>Advanced</summary><p className="muted">Guild ID: {guildId}</p></details>
+      <details className="panel advancedDetails"><summary>Advanced</summary><p className="muted">Guild ID: {guildId}</p></details>
     </main>
   );
 }

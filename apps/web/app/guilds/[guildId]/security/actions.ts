@@ -15,6 +15,7 @@ import { auth } from '../../../../auth';
 import { requireGuildAccess } from '../../../../lib/authorization';
 import { getWebDiscordAdapter } from '../../../../lib/discord-runtime';
 import { getWebRuntime } from '../../../../lib/server-runtime';
+import { runWithActionFeedback } from '../../../../lib/action-feedback';
 
 const FIREWALL_MODES = new Set<FirewallMode>(['OBSERVE', 'ALERT', 'ENFORCE']);
 const TRUST_STATES = new Set<InventoryTrustState>(['TRUSTED', 'APPROVED', 'UNKNOWN', 'BLOCKED']);
@@ -90,6 +91,7 @@ async function recordEmergencyTransition(input: {
 
 export async function activateLockdownAction(formData: FormData): Promise<void> {
   const { guildId, runtime, actorUserId } = await authorizedRuntime(formData);
+  await runWithActionFeedback(`/guilds/${guildId}/security`, [`/guilds/${guildId}/security`], async () => {
   const scope = requiredString(formData, 'scope') as SecurityLockdownScope;
   const reason = requiredString(formData, 'reason');
   if (!LOCKDOWN_SCOPES.has(scope)) throw new Error('Invalid Lockdown scope.');
@@ -112,10 +114,12 @@ export async function activateLockdownAction(formData: FormData): Promise<void> 
     lockedScopes: [scope],
     reason,
   });
+  });
 }
 
 export async function clearLockdownAction(formData: FormData): Promise<void> {
   const { guildId, runtime, actorUserId } = await authorizedRuntime(formData);
+  await runWithActionFeedback(`/guilds/${guildId}/security`, [`/guilds/${guildId}/security`], async () => {
   const reason = requiredString(formData, 'reason');
   const state = await runtime.repositories.security.transitionSecurityState({
     guildId,
@@ -136,10 +140,12 @@ export async function clearLockdownAction(formData: FormData): Promise<void> {
     lockedScopes: [],
     reason,
   });
+  });
 }
 
 export async function activatePanicAction(formData: FormData): Promise<void> {
   const { guildId, runtime, actorUserId } = await authorizedRuntime(formData);
+  await runWithActionFeedback(`/guilds/${guildId}/security`, [`/guilds/${guildId}/security`], async () => {
   const reason = requiredString(formData, 'reason');
   if (formData.get('confirm') !== 'on') throw new Error('Panic confirmation is required.');
 
@@ -170,10 +176,12 @@ export async function activatePanicAction(formData: FormData): Promise<void> {
     reason,
     incidentId: incident.id,
   });
+  });
 }
 
 export async function clearPanicAction(formData: FormData): Promise<void> {
   const { guildId, runtime, actorUserId } = await authorizedRuntime(formData);
+  await runWithActionFeedback(`/guilds/${guildId}/security`, [`/guilds/${guildId}/security`], async () => {
   const reason = requiredString(formData, 'reason');
   const state = await runtime.repositories.security.transitionSecurityState({
     guildId,
@@ -194,10 +202,12 @@ export async function clearPanicAction(formData: FormData): Promise<void> {
     lockedScopes: [],
     reason,
   });
+  });
 }
 
 export async function saveFirewallSettingsAction(formData: FormData): Promise<void> {
   const { guildId, runtime, actorUserId } = await authorizedRuntime(formData);
+  await runWithActionFeedback(`/guilds/${guildId}/security`, [`/guilds/${guildId}/security`, `/guilds/${guildId}/setup`], async () => {
   const botMode = requiredString(formData, 'botMode') as FirewallMode;
   const webhookMode = requiredString(formData, 'webhookMode') as FirewallMode;
   if (!FIREWALL_MODES.has(botMode) || !FIREWALL_MODES.has(webhookMode)) {
@@ -226,12 +236,12 @@ export async function saveFirewallSettingsAction(formData: FormData): Promise<vo
   } catch {
     // The settings are already durable.
   }
-  revalidatePath(`/guilds/${guildId}/security`);
-  revalidatePath(`/guilds/${guildId}/setup`);
+  });
 }
 
 export async function saveInventoryTrustAction(formData: FormData): Promise<void> {
   const { guildId, runtime, actorUserId } = await authorizedRuntime(formData);
+  await runWithActionFeedback(`/guilds/${guildId}/security`, [`/guilds/${guildId}/security`], async () => {
   const inventoryType = requiredString(formData, 'inventoryType');
   const resourceId = requiredString(formData, 'resourceId');
   const trustState = requiredString(formData, 'trustState') as InventoryTrustState;
@@ -261,5 +271,5 @@ export async function saveInventoryTrustAction(formData: FormData): Promise<void
   } catch {
     // The inventory state is already durable.
   }
-  revalidatePath(`/guilds/${guildId}/security`);
+  });
 }

@@ -4,6 +4,7 @@ import {
   confirmRestoreAction, queueBackupNowAction, requestRestorePreviewAction,
   retryRestoreAction, saveBackupPolicyAction,
 } from './actions';
+import { actionNotice } from '../../../../lib/action-feedback';
 
 function formatDate(value: Date | null): string {
   return value === null ? '—' : value.toISOString();
@@ -24,8 +25,9 @@ function previewOperations(value: Record<string, unknown> | null): readonly {
 
 export default async function RecoveryPage({
   params,
-}: Readonly<{ params: Promise<{ guildId: string }> }>) {
-  const { guildId } = await params;
+  searchParams = Promise.resolve({}),
+}: Readonly<{ params: Promise<{ guildId: string }>; searchParams?: Promise<{ notice?: string | string[] }> }>) {
+  const [{ guildId }, query] = await Promise.all([params, searchParams]);
   const runtime = getWebRuntime();
   const [policy, backups, recoveryJobs] = await Promise.all([
     runtime.repositories.backups.getPolicy(guildId),
@@ -38,13 +40,14 @@ export default async function RecoveryPage({
 
   return (
     <main className="shell">
+      {actionNotice(query.notice) ? <div className="notice" role="status">{actionNotice(query.notice)}</div> : null}
       <header className="topbar">
         <div>
           <p className="eyebrow">Recovery</p>
           <h1>Local backup and recovery</h1>
           <p className="lede">
-            Structural snapshots are stored by the worker on local durable storage. Message archives
-            are optional evidence only and are never replayed during recovery.
+            Every restore is preview-first. Structural snapshots are stored by the worker on local
+            durable storage. Message archives are evidence only and are never replayed.
           </p>
         </div>
       </header>
@@ -146,6 +149,7 @@ export default async function RecoveryPage({
 
       <section className="panel">
         <h2>Recovery jobs</h2>
+        <p className="muted">Destructive restore execution and retry are Discord guild owner only.</p>
         {recoveryJobs.length === 0 ? (
           <p className="muted">No recovery previews have been requested.</p>
         ) : (
@@ -180,7 +184,7 @@ export default async function RecoveryPage({
                             <input name="confirmRestore" required type="checkbox" value="CONFIRM" />
                             <span>I understand recreated Discord resources receive new IDs.</span>
                           </label>
-                          <button type="submit">Confirm restore (owner only)</button>
+                          <button className="danger" type="submit">Confirm restore (owner only)</button>
                         </form>
                       ) : job.phase === 'EXECUTION' && job.status === 'FAILED' ? (
                         <form action={retryRestoreAction}>

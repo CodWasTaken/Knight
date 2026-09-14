@@ -1,11 +1,13 @@
 import { getWebDiscordAdapter } from '../../../../lib/discord-runtime';
 import { getWebRuntime } from '../../../../lib/server-runtime';
 import { saveLoggingSettingsAction } from './actions';
+import { actionNotice } from '../../../../lib/action-feedback';
 
 export default async function LoggingPage({
   params,
-}: Readonly<{ params: Promise<{ guildId: string }> }>) {
-  const { guildId } = await params;
+  searchParams = Promise.resolve({}),
+}: Readonly<{ params: Promise<{ guildId: string }>; searchParams?: Promise<{ notice?: string | string[] }> }>) {
+  const [{ guildId }, query] = await Promise.all([params, searchParams]);
   const runtime = getWebRuntime();
   const settings = await runtime.repositories.securityLedger.getLoggingSettings(guildId);
   const discord = getWebDiscordAdapter(runtime);
@@ -20,6 +22,7 @@ export default async function LoggingPage({
 
   return (
     <main className="shell">
+      {actionNotice(query.notice) ? <div className="notice" role="status">{actionNotice(query.notice)}</div> : null}
       <header className="topbar">
         <div>
           <p className="eyebrow">Logging</p>
