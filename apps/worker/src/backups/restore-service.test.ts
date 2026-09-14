@@ -157,7 +157,7 @@ describe('RestoreService', () => {
       guildId: '100', jobId: 'job-1', error: 'Discord channel create failed',
     });
     expect(made.backups.completeRestore).not.toHaveBeenCalled();
-    expect(made.locks.release).toHaveBeenCalledWith('recovery:100', 'lock-token');
+    expect(made.locks.release).toHaveBeenCalledWith('guild-operation:100', 'lock-token');
   });
 
   it('resumes from the next uncompleted operation and never replays archived messages', async () => {
@@ -354,7 +354,7 @@ describe('RestoreService', () => {
 
     await made.service.processExecutionJob('job-1');
 
-    expect(made.locks.acquire).toHaveBeenCalledWith('recovery:100', expect.any(Number));
+    expect(made.locks.acquire).toHaveBeenCalledWith('guild-operation:100', expect.any(Number));
     expect(made.discord.createRole).not.toHaveBeenCalled();
     expect(made.backups.failRestore).toHaveBeenCalledWith({
       guildId: '100', jobId: 'job-1', error: 'Recovery is already running for this guild',

@@ -41,6 +41,8 @@ function makeService(options: { archiveEnabled?: boolean; policy?: unknown; capt
     write: vi.fn().mockResolvedValue({ relativePath: '100/backup-1.json.gz', sha256: 'a'.repeat(64) }),
   };
   const restore = { processNextPendingRestore: vi.fn().mockResolvedValue(false) };
+  const reset = { recoverInterrupted: vi.fn().mockResolvedValue(undefined), processNextPendingReset: vi.fn().mockResolvedValue(false) };
+  const locks = { acquire: vi.fn().mockResolvedValue('lock-token'), release: vi.fn().mockResolvedValue(true) };
   return {
     service: new BackupService({
       backups,
@@ -50,6 +52,8 @@ function makeService(options: { archiveEnabled?: boolean; policy?: unknown; capt
       security,
       storage,
       restore,
+      reset,
+      locks,
       archiveEnabled: options.archiveEnabled ?? false,
       now: () => new Date('2026-09-12T12:00:00.000Z'),
     }),
@@ -58,6 +62,8 @@ function makeService(options: { archiveEnabled?: boolean; policy?: unknown; capt
     storage,
     security,
     restore,
+    reset,
+    locks,
   };
 }
 
@@ -86,7 +92,7 @@ describe('BackupService', () => {
   });
 
   it('captures Discord structure plus Knight recovery references and completes the backup', async () => {
-    const { service, backups, storage } = makeService();
+    const { service, backups, storage, locks } = makeService();
 
     await expect(service.processNextPendingBackup()).resolves.toBe(true);
 
@@ -112,6 +118,8 @@ describe('BackupService', () => {
       relativePath: '100/backup-1.json.gz',
       sha256: 'a'.repeat(64),
     });
+    expect(locks.acquire).toHaveBeenCalledWith('guild-operation:100', expect.any(Number));
+    expect(locks.release).toHaveBeenCalledWith('guild-operation:100', 'lock-token');
   });
 
   it('archives only selected channels up to the configured cap when opt-in is enabled', async () => {
@@ -181,7 +189,19 @@ describe('BackupService', () => {
 
     await made.service.runTick(now);
 
+    expect(made.reset.processNextPendingReset).toHaveBeenCalledTimes(1);
     expect(made.restore.processNextPendingRestore).toHaveBeenCalledTimes(1);
+    expect(made.reset.processNextPendingReset.mock.invocationCallOrder[0]).toBeLessThan(
+      made.backups.claimPendingBackup.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it('fails a claimed backup safely when the guild operation lock is held', async () => {
+    const made = makeService();
+    made.locks.acquire.mockResolvedValueOnce(null);
+    await made.service.processNextPendingBackup();
+    expect(made.discord.captureGuild).not.toHaveBeenCalled();
+    expect(made.backups.failBackup).toHaveBeenCalledWith(expect.objectContaining({ error: expect.stringContaining('already running') }));
   });
 
   it('returns false when there is no pending backup', async () => {

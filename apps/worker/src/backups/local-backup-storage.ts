@@ -83,4 +83,9 @@ export class LocalBackupStorage {
     const json = await gunzipAsync(compressed);
     return JSON.parse(json.toString('utf8')) as T;
   }
+
+  public async deleteGuild(guildId: string): Promise<void> {
+    assertIdentifier(guildId);
+    await this.fileSystem.rm(join(this.rootDir, guildId), { recursive: true, force: true });
+  }
 }

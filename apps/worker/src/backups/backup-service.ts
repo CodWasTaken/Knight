@@ -6,6 +6,7 @@ import type {
 } from '@knight/contracts';
 
 export type BackupJob = Readonly<{ id: string; guildId: string }>;
+const BACKUP_LOCK_TTL_MS = 5 * 60_000;
 
 type BackupDependencies = Readonly<{
   backups: {
@@ -56,6 +57,11 @@ type BackupDependencies = Readonly<{
     }>;
   };
   restore: { processNextPendingRestore(): Promise<boolean> };
+  reset: { recoverInterrupted(): Promise<void>; processNextPendingReset(): Promise<boolean> };
+  locks: {
+    acquire(key: string, ttlMs: number): Promise<string | null>;
+    release(key: string, token: string): Promise<boolean>;
+  };
   archiveEnabled: boolean;
   now(): Date;
 }>;
@@ -87,7 +93,10 @@ export class BackupService {
   public constructor(private readonly dependencies: BackupDependencies) {}
 
   public async recoverInterruptedJobs(): Promise<void> {
-    await this.dependencies.backups.recoverInterruptedJobs(this.dependencies.now());
+    await Promise.all([
+      this.dependencies.backups.recoverInterruptedJobs(this.dependencies.now()),
+      this.dependencies.reset.recoverInterrupted(),
+    ]);
   }
 
   public async runDueDaily(now: Date): Promise<void> {
@@ -101,7 +110,11 @@ export class BackupService {
     const job = await this.dependencies.backups.claimPendingBackup();
     if (!job) return false;
 
+    const lockKey = `guild-operation:${job.guildId}`;
+    let token: string | null = null;
     try {
+      token = await this.dependencies.locks.acquire(lockKey, BACKUP_LOCK_TTL_MS);
+      if (token === null) throw new Error('Another guild operation is already running');
       const policy = await this.dependencies.backups.getPolicy(job.guildId);
       const archiveChannelIds = policy?.archiveChannelIds ?? [];
       if (archiveChannelIds.length > 0 && !this.dependencies.archiveEnabled) {
@@ -157,11 +170,14 @@ export class BackupService {
         backupId: job.id,
         error: errorMessage(error),
       });
+    } finally {
+      if (token !== null) await this.dependencies.locks.release(lockKey, token).catch(() => false);
     }
     return true;
   }
 
   public async runTick(now: Date): Promise<void> {
+    await this.dependencies.reset.processNextPendingReset();
     await this.runDueDaily(now);
     await this.processNextPendingBackup();
     await this.dependencies.restore.processNextPendingRestore();

@@ -502,7 +502,7 @@ export class RestoreService {
       );
       const preview = asPreview(job.preview);
       let checkpoint = asCheckpoint(job.checkpoint);
-      const lockKey = `recovery:${job.guildId}`;
+      const lockKey = `guild-operation:${job.guildId}`;
       const token = await this.dependencies.locks.acquire(lockKey, RECOVERY_LOCK_TTL_MS);
       if (token === null) {
         await this.dependencies.backups.failRestore({

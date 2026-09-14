@@ -3,6 +3,7 @@ import { parseEnv } from '@knight/config';
 import {
   BackupRepository,
   createDatabase,
+  FactoryResetRepository,
   SecurityLedgerRepository,
   SecurityRepository,
   StaffRepository,
@@ -12,6 +13,7 @@ import { createRedis, LockStore } from '@knight/redis';
 import { BackupService } from './backups/backup-service.js';
 import { LocalBackupStorage } from './backups/local-backup-storage.js';
 import { RestoreService } from './backups/restore-service.js';
+import { FactoryResetService } from './factory-reset/factory-reset-service.js';
 
 type WorkerDatabase = {
   pool: {
@@ -48,12 +50,18 @@ function createDefaultBackupService(input: {
   const ledger = new SecurityLedgerRepository(database);
   const security = new SecurityRepository(database);
   const storage = new LocalBackupStorage(input.env.KNIGHT_BACKUP_DIR);
+  const locks = new LockStore(input.redis as ReturnType<typeof createRedis>);
+  const reset = new FactoryResetService({
+    resets: new FactoryResetRepository(database),
+    storage,
+    locks,
+  });
   const restore = new RestoreService({
     backups, discord, staff, ledger, security, storage,
-    locks: new LockStore(input.redis as ReturnType<typeof createRedis>),
+    locks,
   });
   return new BackupService({
-    backups, discord, staff, ledger, security, storage, restore,
+    backups, discord, staff, ledger, security, storage, restore, reset, locks,
     archiveEnabled: input.env.ENABLE_MESSAGE_CONTENT_ARCHIVE,
     now: () => new Date(),
   });

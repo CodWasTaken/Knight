@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -17,6 +17,24 @@ afterEach(async () => {
 });
 
 describe('LocalBackupStorage', () => {
+
+  it('deletes only the requested guild backup directory', async () => {
+    const { root, storage } = await makeStorage();
+    await mkdir(join(root, '100'), { recursive: true });
+    await mkdir(join(root, '200'), { recursive: true });
+    await writeFile(join(root, '100', 'one.json.gz'), 'one');
+    await writeFile(join(root, '200', 'two.json.gz'), 'two');
+
+    await storage.deleteGuild('100');
+
+    await expect(access(join(root, '100'))).rejects.toThrow();
+    await expect(access(join(root, '200', 'two.json.gz'))).resolves.toBeUndefined();
+  });
+
+  it.each(['../100', '100/child', '100\\child', '..'])('rejects unsafe delete guild id %s', async (guildId) => {
+    const { storage } = await makeStorage();
+    await expect(storage.deleteGuild(guildId)).rejects.toThrow('Invalid backup identifier');
+  });
 
   it('canonicalizes object keys so equivalent snapshots have the same compressed hash', async () => {
     const { storage } = await makeStorage();
