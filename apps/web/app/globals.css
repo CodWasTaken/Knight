@@ -516,6 +516,20 @@ button:disabled {
   font-size: 0.78rem;
   overflow-wrap: anywhere;
 }
+.guildLabel strong,
+.guildLabel span {
+  display: block;
+}
+.guildLabel strong {
+  color: #f2f3f5;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+.guildLabel span {
+  margin-top: 0.2rem;
+  color: #8995aa;
+  font-size: 0.7rem;
+}
 .guildNav {
   display: grid;
   gap: 0.25rem;

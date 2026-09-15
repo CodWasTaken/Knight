@@ -25,6 +25,14 @@ describe('dashboard shell structure', () => {
     expect(layout).toContain('href={`/guilds/${guildId}/security/protected`}');
     expect(layout).toContain('href={`/guilds/${guildId}/recovery`}');
     expect(layout).toContain('href={`/guilds/${guildId}/setup`}');
+    expect(layout).toContain('getGuildIdentity(guildId)');
+    expect(layout).toContain('Server ID: {guildId}');
+  });
+
+  it('shows live guild names with muted server IDs on the server picker', async () => {
+    const page = await source('../app/page.tsx');
+    expect(page).toContain('getGuildIdentity(guild.id)');
+    expect(page).toContain('Server ID: {guild.id}');
   });
 
   it('uses flat styling without CSS gradients or large decorative shadows', async () => {

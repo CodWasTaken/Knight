@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { auth, signIn, signOut } from '../auth';
 import { loadDashboardGuilds } from '../lib/dashboard';
+import { getWebDiscordAdapter } from '../lib/discord-runtime';
 import { getWebRuntime } from '../lib/server-runtime';
 
 export default async function Home() {
@@ -29,8 +30,17 @@ export default async function Home() {
     );
   }
 
-  const { repositories } = getWebRuntime();
-  const guilds = await loadDashboardGuilds(session, repositories);
+  const runtime = getWebRuntime();
+  const guilds = await loadDashboardGuilds(session, runtime.repositories);
+  const discord = getWebDiscordAdapter(runtime);
+  const guildCards = await Promise.all(guilds.map(async (guild) => {
+    if (discord === null) return { ...guild, name: 'Discord server' };
+    try {
+      return { ...guild, name: (await discord.getGuildIdentity(guild.id)).name };
+    } catch {
+      return { ...guild, name: 'Discord server' };
+    }
+  }));
 
   return (
     <main className="shell">
@@ -52,7 +62,7 @@ export default async function Home() {
         </form>
       </header>
 
-      {guilds.length === 0 ? (
+      {guildCards.length === 0 ? (
         <section className="panel empty">
           <h2>No Knight-authorized servers yet</h2>
           <p>
@@ -62,12 +72,12 @@ export default async function Home() {
         </section>
       ) : (
         <section className="guildGrid" aria-label="Knight-authorized servers">
-          {guilds.map((guild) => (
+          {guildCards.map((guild) => (
             <Link className="panel guildCard" href={`/guilds/${guild.id}`} key={guild.id}>
               <div className="cardHeading">
                 <div>
-                  <p className="muted small">Discord guild</p>
-                  <h2>{guild.id}</h2>
+                  <h2>{guild.name}</h2>
+                  <p className="muted small">Server ID: {guild.id}</p>
                 </div>
                 <span className={`mode mode-${guild.mode.toLowerCase()}`}>{guild.mode}</span>
               </div>
